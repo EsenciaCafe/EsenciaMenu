@@ -1,0 +1,215 @@
+{
+    "meta": {
+      "currency": "EUR",
+      "igic_note": "IGIC incluido"
+    },
+    "sections": [
+      {
+        "id": "mini-pancakes",
+        "title": "Poffertjes",
+        "type": "mini_pancakes",
+        "group": "Poffertjes",
+        "base": {
+          "title": "1 · Comienza con la base",
+          "description": "Una ración de 12 mini pancakes",
+          "price": 3.50
+        },
+        "toppings": [
+          { "name": "Nutella", "price": 1.50 },
+          { "name": "Crema de Pistacho", "price": 2.50 },
+          { "name": "Crema de Lotus", "price": 1.50 },
+          { "name": "Caramelo Salado", "price": 1.50 },
+          { "name": "Caramelo", "price": 1.50 },
+          { "name": "Dulce de Leche", "price": 1.50 },
+          { "name": "Crema de Cacahuete", "price": 1.50 },
+          { "name": "Sirope de Arce", "price": 2.50 },
+          { "name": "Leche Condensada", "price": 1.00 },
+          { "name": "Miel", "price": 1.00 },
+          { "name": "Sirope Chocolate", "price": 1.50 },
+          { "name": "Mantequilla", "price": 0.50 },
+          { "name": "Helado de Vainilla", "price": 2.00 },
+          { "name": "Galleta Oreo", "price": 1.50 },
+          { "name": "Galleta Lotus", "price": 1.50 },
+          { "name": "Pistacho Triturado", "price": 2.00 },
+          { "name": "Fresa", "price": 2.00 },
+          { "name": "Plátano", "price": 1.50 },
+          { "name": "Limón", "price": 1.00 },
+          { "name": "Azúcar", "free": true }
+        ]
+      },
+  
+      {
+        "id": "tostas",
+        "title": "Tostas",
+        "subtitle": "Pan de masa madre",
+        "note": "Por 1 € extra, cambia el pan por croissant.",
+        "type": "simple",
+        "group": "Desayunos",
+        "items": [
+          { "name": "Aguacate y Jamón", "desc": "Aguacate laminado y Jamón Serrano", "price": 5.50 },
+          { "name": "Aguacate", "desc": "Aguacate laminado y Semillas de Sésamo", "price": 4.50 },
+          { "name": "Salmón", "desc": "Salmón ahumado, Queso Crema y Rúcula", "price": 6.50 },
+          { "name": "Salmón y Aguacate", "desc": "Salmón ahumado y Aguacate laminado", "price": 7.50 }
+        ]
+      },
+      {
+        "id": "extras-tostas",
+        "title": "Extras (tostas/croissant)",
+        "type": "simple",
+        "group": "Desayunos",
+        "items": [
+          { "name": "Salmón", "price": 3.50 },
+          { "name": "Serrano", "price": 2.50 },
+          { "name": "Queso Crema", "price": 2.00 },
+          { "name": "Aguacate", "price": 2.50 },
+          { "name": "Queso", "price": 1.50 },
+          { "name": "Jamón", "price": 1.50 },
+          { "name": "Rúcula", "price": 1.00 }
+        ]
+      },
+  
+      {
+        "id": "sandwich",
+        "title": "Sándwich",
+        "type": "simple",
+        "group": "Desayunos",
+        "items": [
+          { "name": "Jamón y Queso", "desc": "Jamón Ahumado y Queso Gouda", "price": 3.50 }
+        ]
+      },
+  
+      {
+        "id": "especiales",
+        "title": "Especiales",
+        "subtitle": "Elige entre Frío o Caliente",
+        "type": "simple",
+        "group": "Café",
+        "items": [
+          { "name": "Clásico", "price": 2.50 },
+          { "name": "Nutella", "price": 4.50 },
+          { "name": "Lotus", "price": 4.50 },
+          { "name": "Pistacho", "desc": "con Cold Cheese Foam", "price": 6.00 },
+          { "name": "Dulce de Leche", "price": 4.50 },
+          { "name": "Caramelo Salado", "price": 4.50 },
+          { "name": "Cacahuete", "price": 4.50 }
+        ]
+      },
+      {
+        "id": "cafe",
+        "title": "Café",
+        "type": "simple",
+        "group": "Café",
+        "items": [
+          { "name": "Expreso", "price": 1.20 },
+          { "name": "Cortado", "price": 1.20 },
+          { "name": "Leche y Leche", "price": 1.60 },
+          { "name": "Capuccino", "price": 2.00 },
+          { "name": "Americano", "price": 1.20 },
+          { "name": "Café con Leche", "price": 1.50 },
+          { "name": "Flat White", "price": 1.80 }
+        ]
+      },
+      {
+        "id": "matcha",
+        "title": "Matcha",
+        "type": "simple",
+        "group": "Café",
+        "items": [
+          { "name": "Coconut Matcha", "price": 4.50 },
+          { "name": "Strawberry Matcha", "price": 4.50 }
+        ]
+      },
+      {
+        "id": "extras-bebidas",
+        "title": "Extras (bebidas)",
+        "type": "simple",
+        "group": "Café",
+        "items": [
+          { "name": "Leche Avena", "price": 0.50 },
+          { "name": "Leche Soja", "price": 0.50 },
+          { "name": "Cold Cheese Foam", "price": 2.00 }
+        ]
+      },
+  
+      {
+        "id": "refrescos",
+        "title": "Refrescos",
+        "type": "simple",
+        "group": "Bebidas",
+        "items": [
+          { "name": "Coca Cola", "price": 2.00 },
+          { "name": "Coca Cola Zero", "price": 2.00 },
+          { "name": "Sprite", "price": 2.00 },
+          { "name": "Fanta Naranja", "price": 2.00 },
+          { "name": "Fanta Limón", "price": 2.00 },
+          { "name": "Nestea", "price": 2.50 },
+          { "name": "Zumo Mango", "price": 2.50 },
+          { "name": "Agua con Gas", "price": 1.50 },
+          { "name": "Agua", "price": 1.00 }
+        ]
+      },
+      {
+        "id": "cervezas",
+        "title": "Cervezas",
+        "type": "simple",
+        "group": "Bebidas",
+        "items": [
+          { "name": "Estrella Galicia", "price": 1.50 },
+          { "name": "Corona", "price": 3.00 },
+          { "name": "1906", "price": 3.00 }
+        ]
+      },
+      {
+        "id": "te-caliente",
+        "title": "Té Caliente",
+        "type": "simple",
+        "group": "Café",
+        "items": [
+          { "name": "English Breakfast", "price": 2.00 },
+          { "name": "Menta Poleo", "price": 2.00 },
+          { "name": "Frutas del Bosque", "price": 2.00 },
+          { "name": "Manzanilla", "price": 2.00 }
+        ]
+      },
+  
+      {
+        "id": "smoothies",
+        "title": "Smoothies",
+        "type": "simple",
+        "group": "Bebidas",
+        "items": [
+          { "name": "Piña, Mango y Papaya", "price": 4.50 },
+          { "name": "Plátano y Fresa", "price": 4.50 },
+          { "name": "Espinaca, Piña y Pepino", "price": 4.50 },
+          { "name": "Açaí, Arándano, Mango y Plátano", "price": 4.50 }
+        ]
+      },
+  
+      {
+        "id": "te-frio",
+        "title": "Té Frío",
+        "subtitle": "Vaso 16oz con hielo",
+        "type": "simple",
+        "group": "Bebidas",
+        "items": [
+          { "name": "Limón", "price": 3.00 },
+          { "name": "Frutos Rojos (Fresa y Frambuesa)", "price": 3.00 },
+          { "name": "Tropical (Maracuyá y Pera)", "price": 3.00 },
+          { "name": "Melón", "price": 3.00 }
+        ]
+      },
+  
+      {
+        "id": "yogurt",
+        "title": "Yogurt",
+        "subtitle": "",
+        "type": "simple",
+        "group": "Desayunos",
+        "items": [
+          { "name": "Yogurt con Granola y Miel", "price": 3.50 },
+          { "name": "Yogurt con Frutas", "price": 3.50 },
+          { "name": "Yogurt con Frutas y Granola", "price": 4.00 }
+        ]
+      }
+    ]
+  }
