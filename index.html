@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Esencia — Carta</title>
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="description" content="Carta de Esencia: cafés, mini pancakes, tostas, croissants, tés fríos, smoothies y más. IGIC incluido." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <!-- Usa tu archivo tal como me lo pasaste -->
+      <img src="logo letras.png" alt="Esencia" class="logo-img" decoding="async" fetchpriority="high"
+           onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
+      <!-- Fallback si falta la imagen -->
+      <span class="logo" style="display:none">Esencia</span>
+      <span class="tag">Repostería casera — IGIC incluido</span>
+    </div>
+    <nav id="nav" class="nav"></nav>
+  </header>
+
+  <main id="app" class="container" aria-live="polite"></main>
+
+  <footer class="site-footer">
+    <small id="igic-note">IGIC incluido</small>
+  </footer>
+
+  <!-- IMPORTANTE: solo un script -->
+  <script src="app.js" defer></script>
+</body>
+</html>
