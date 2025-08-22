@@ -1,15 +1,15 @@
 :root{
-  --bg:#ffffff;
-  --surface:#ffffff;
-  --text:#1f2937;
-  --muted:#6b7280;
-  --line:#e5e7eb;
-  --accent:#b08968;
-  --chip:#f7f7f8;
-  --card:#fafafa;
-
-  --radius:14px;
-  --radius-lg:18px;
+  --bg:#f8f7f5;           /* fondo tipo papel cálido */
+  --surface:#ffffff;       /* tarjetas */
+  --text:#1f2937;          /* texto principal */
+  --muted:#6b7280;         /* texto secundario */
+  --line:#eae7e3;          /* líneas muy suaves */
+  --accent:#b08968;        /* dorado/madera */
+  --accent-2:#e6d5c7;      /* tinte del acento */
+  --chip:#f4f1ed;          /* chips/nav */
+  --radius:16px;
+  --radius-lg:22px;
+  --shadow:0 1px 2px rgba(0,0,0,.04), 0 8px 30px rgba(0,0,0,.06);
 
   --elev1: 0 1px 2px rgba(0,0,0,.05), 0 2px 6px rgba(0,0,0,.04);
   --elev2: 0 10px 20px rgba(0,0,0,.06), 0 3px 8px rgba(0,0,0,.05);
