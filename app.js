@@ -1,6 +1,7 @@
 // app.js
 // Lee la carta desde Firestore, pinta con tus estilos y
-// ordena las secciones DENTRO de cada categoría usando el campo numérico `order`.
+// ordena las secciones por `order` dentro de cada categoría,
+// y también ordena items/toppings por `order`.
 
 import { db } from "./firebase.js";
 import {
@@ -17,7 +18,6 @@ const slug = (s="") =>
     .replace(/[^\w]+/g,'-').replace(/(^-|-$)/g,'');
 
 const formatPrice = (n) => {
-  // Acepta "3,50€", "3.50", number, etc. y devuelve "3,50 €"
   if (typeof n === "number") {
     return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' })
       .format(n).replace(/\u00A0/g,' ');
@@ -36,7 +36,6 @@ const formatPrice = (n) => {
 };
 
 /* ========= Tabs (chips) ========= */
-// Orden y etiquetas de navegación (4 chips fijos)
 const GROUPS = [
   { id: "poffertjes", label: "Poffertjes" },
   { id: "cafe",        label: "Café" },
@@ -85,14 +84,14 @@ async function loadData(){
         getDocs(collection(db, "sections", sid, "toppings")).catch(()=>({docs:[]})),
       ]);
 
-      const items    = itemsSnap.docs.map(d => d.data());
-      const toppings = toppingsSnap.docs.map(d => d.data());
+      const items    = itemsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const toppings = toppingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
       return { id: sid, ...base, ...(items.length?{items}:{}) , ...(toppings.length?{toppings}:{}) };
     })
   );
 
-  // Orden general de secciones: por grupo (chips) y luego alfabético (solo como orden global del array)
+  // Orden general de secciones: por grupo (chips) y luego alfabético (solo como orden global)
   sections.sort((a,b)=>{
     const ga = GROUPS.findIndex(g => g.id === groupToId(a.group || a.title || a.id));
     const gb = GROUPS.findIndex(g => g.id === groupToId(b.group || b.title || b.id));
@@ -152,12 +151,21 @@ function renderBaseAndToppings(sec){
     `;
   }
   if (Array.isArray(sec.toppings) && sec.toppings.length) {
+    const tops = sec.toppings
+      .slice()
+      .sort((a,b)=>{
+        const ao = (typeof a.order === "number") ? a.order : 9999;
+        const bo = (typeof b.order === "number") ? b.order : 9999;
+        if (ao !== bo) return ao - bo;
+        return (a.name || "").localeCompare(b.name || "", "es");
+      });
+
     html += `
       <div class="card">
         <div class="title">Toppings</div>
         <div class="muted">Elige los que quieras</div>
         <div class="toppings">
-          ${sec.toppings.map(t => `<span class="badge">${t.name}${t.price ? " — " + formatPrice(t.price) : ""}</span>`).join("")}
+          ${tops.map(t => `<span class="badge">${t.name}${t.price ? " — " + formatPrice(t.price) : ""}</span>`).join("")}
         </div>
       </div>
     `;
@@ -165,11 +173,19 @@ function renderBaseAndToppings(sec){
   return html;
 }
 
-function renderItemsList(items=[]){
+function renderItemsList(items = []){
   if (!items.length) return "";
+
+  const sorted = items.slice().sort((a,b)=>{
+    const ao = (typeof a.order === "number") ? a.order : 9999;
+    const bo = (typeof b.order === "number") ? b.order : 9999;
+    if (ao !== bo) return ao - bo;
+    return (a.name || "").localeCompare(b.name || "", "es");
+  });
+
   return `
     <div class="grid">
-      ${items.map(it => `
+      ${sorted.map(it => `
         <div class="card">
           <div class="title">
             <span>${it.name || ""}</span>
@@ -186,7 +202,6 @@ function renderSection(sec){
   const subtitle = sec.subtitle ? `<div class="muted" style="margin:6px 0 10px">${sec.subtitle}</div>` : "";
   const note     = sec.note ? `<div class="note">${sec.note}</div>` : "";
 
-  // En Poffertjes mostramos base + toppings arriba (si existen)
   const isPoff = groupToId(sec.group || sec.title || sec.id) === "poffertjes";
   const poffBlock = isPoff ? renderBaseAndToppings(sec) : "";
 
@@ -205,7 +220,7 @@ function renderTab(tabId){
   const app = $("#app");
   let sections = STATE.byGroup[tabId] || [];
 
-  // Ordenar por 'order' ascendente; si falta, al final. Tiebreaker: título.
+  // Orden por 'order' asc dentro del grupo; sin order va al final; desempate por título
   sections = sections.slice().sort((a, b) => {
     const ao = (typeof a.order === "number") ? a.order : 9999;
     const bo = (typeof b.order === "number") ? b.order : 9999;
