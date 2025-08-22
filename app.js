@@ -1,14 +1,15 @@
 // app.js
-// Lee la carta desde Firestore y mantiene la estética con chips fijos (4 en una línea)
+// Lee la carta desde Firestore, pinta con tus estilos y
+// ordena las secciones DENTRO de cada categoría usando el campo numérico `order`.
 
 import { db } from "./firebase.js";
 import {
   getDocs, getDoc, collection, doc
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
-/* ========= Utilidades ========= */
-const $$ = (sel, el = document) => el.querySelector(sel);
-const $$$ = (sel, el = document) => [...el.querySelectorAll(sel)];
+/* ========= Helpers ========= */
+function $(sel, el = document){ return el.querySelector(sel); }
+function $all(sel, el = document){ return [...el.querySelectorAll(sel)]; }
 
 const slug = (s="") =>
   String(s).toLowerCase()
@@ -22,7 +23,6 @@ const formatPrice = (n) => {
       .format(n).replace(/\u00A0/g,' ');
   }
   if (typeof n === "string") {
-    // Normaliza separador y añade € si falta
     const hasEuro = /€/.test(n);
     let v = n.trim().replace(',', '.').replace(/[^\d.]/g, '');
     const num = parseFloat(v);
@@ -35,8 +35,8 @@ const formatPrice = (n) => {
   return "";
 };
 
-/* ========= Orden & Tabs ========= */
-// Orden y etiquetas de navegación (4 chips)
+/* ========= Tabs (chips) ========= */
+// Orden y etiquetas de navegación (4 chips fijos)
 const GROUPS = [
   { id: "poffertjes", label: "Poffertjes" },
   { id: "cafe",        label: "Café" },
@@ -45,16 +45,22 @@ const GROUPS = [
 ];
 
 const groupToId = (g) => {
-  const s = slug(g);
+  const s = slug(g || "");
   if (/^poff/.test(s)) return "poffertjes";
   if (/^cafe/.test(s) || /^caf/.test(s)) return "cafe";
   if (/^desayun/.test(s)) return "desayunos";
   if (/^bebid/.test(s)) return "bebidas";
-  // fallback por si no cuadra
   return s || "otros";
 };
 
-/* ========= Carga de datos (rápida) ========= */
+/* ========= Estado ========= */
+let STATE = {
+  meta: {},
+  sections: [],
+  byGroup: {},   // { groupId: [sections] }
+};
+
+/* ========= Carga de datos (rápida con Promise.all) ========= */
 async function loadData(){
   // Meta (opcional)
   let meta = {};
@@ -65,13 +71,13 @@ async function loadData(){
     console.warn("No se pudo leer settings/menu:", e);
   }
 
-  // Secciones (lectura principal)
+  // Secciones
   const secsSnap = await getDocs(collection(db, "sections"));
 
-  // Paraleliza subcolecciones para acelerar (items + toppings)
+  // Paraleliza subcolecciones para acelerar
   const sections = await Promise.all(
     secsSnap.docs.map(async (secDoc) => {
-      const base = secDoc.data();
+      const base = secDoc.data();  // incluye title, group, subtitle, note, base, order, etc.
       const sid  = secDoc.id;
 
       const [itemsSnap, toppingsSnap] = await Promise.all([
@@ -86,7 +92,7 @@ async function loadData(){
     })
   );
 
-  // Orden: por GROUPS y luego por título
+  // Orden general de secciones: por grupo (chips) y luego alfabético (solo como orden global del array)
   sections.sort((a,b)=>{
     const ga = GROUPS.findIndex(g => g.id === groupToId(a.group || a.title || a.id));
     const gb = GROUPS.findIndex(g => g.id === groupToId(b.group || b.title || b.id));
@@ -97,36 +103,7 @@ async function loadData(){
   return { meta, sections };
 }
 
-/* ========= Render ========= */
-function buildNav(groupsAvailable){
-  const nav = $("#nav");
-  nav.innerHTML = GROUPS
-    .filter(g => groupsAvailable.includes(g.id)) // sólo muestra grupos que existen en Firestore
-    .map((g, i) => `
-      <a href="#${g.id}" class="${i===0 ? "active" : ""}" data-tab="${g.id}">
-        ${g.label}
-      </a>
-    `)
-    .join("");
-
-  // eventos
-  $$$("#nav a").forEach(a=>{
-    a.addEventListener("click", (e)=>{
-      e.preventDefault();
-      const tab = a.dataset.tab;
-      $$$("#nav a").forEach(x => x.classList.remove("active"));
-      a.classList.add("active");
-      renderTab(tab);
-    });
-  });
-}
-
-let STATE = {
-  meta: {},
-  sections: [],
-  byGroup: {},   // { groupId: [sections] }
-};
-
+/* ========= Agrupar por categoría ========= */
 function groupSections(sections){
   const map = {};
   for (const sec of sections) {
@@ -135,6 +112,30 @@ function groupSections(sections){
     map[gid].push(sec);
   }
   return map;
+}
+
+/* ========= Render ========= */
+function buildNav(groupsAvailable){
+  const nav = $("#nav");
+  nav.innerHTML = GROUPS
+    .filter(g => groupsAvailable.includes(g.id))
+    .map((g, i) => `
+      <a href="#${g.id}" class="${i===0 ? "active" : ""}" data-tab="${g.id}">
+        ${g.label}
+      </a>
+    `)
+    .join("");
+
+  // eventos
+  $all("#nav a").forEach(a=>{
+    a.addEventListener("click", (e)=>{
+      e.preventDefault();
+      const tab = a.dataset.tab;
+      $all("#nav a").forEach(x => x.classList.remove("active"));
+      a.classList.add("active");
+      renderTab(tab);
+    });
+  });
 }
 
 function renderBaseAndToppings(sec){
@@ -182,11 +183,10 @@ function renderItemsList(items=[]){
 }
 
 function renderSection(sec){
-  // Nota corta de sección
   const subtitle = sec.subtitle ? `<div class="muted" style="margin:6px 0 10px">${sec.subtitle}</div>` : "";
   const note     = sec.note ? `<div class="note">${sec.note}</div>` : "";
 
-  // Para Poffertjes mostramos base + toppings arriba (si existen)
+  // En Poffertjes mostramos base + toppings arriba (si existen)
   const isPoff = groupToId(sec.group || sec.title || sec.id) === "poffertjes";
   const poffBlock = isPoff ? renderBaseAndToppings(sec) : "";
 
@@ -200,17 +200,25 @@ function renderSection(sec){
   `;
 }
 
+/* ========= Orden dentro de cada categoría POR `order` ========= */
 function renderTab(tabId){
   const app = $("#app");
-  const sections = STATE.byGroup[tabId] || [];
+  let sections = STATE.byGroup[tabId] || [];
+
+  // Ordenar por 'order' ascendente; si falta, al final. Tiebreaker: título.
+  sections = sections.slice().sort((a, b) => {
+    const ao = (typeof a.order === "number") ? a.order : 9999;
+    const bo = (typeof b.order === "number") ? b.order : 9999;
+    if (ao !== bo) return ao - bo;
+    return (a.title || "").localeCompare(b.title || "", "es");
+  });
+
   app.innerHTML = sections.map(renderSection).join("") || `
     <section class="section"><p class="muted">No hay elementos en esta categoría.</p></section>
   `;
 
   // Anti-overflow defensivo post-render
-  $$$(".grid .card .title").forEach(el => {
-    el.style.minWidth = "0";
-  });
+  $all(".grid .card .title").forEach(el => { el.style.minWidth = "0"; });
 }
 
 /* ========= Init ========= */
@@ -243,6 +251,3 @@ function renderTab(tabId){
     app.innerHTML = `<div class="section"><p>No se pudo cargar la carta. Revisa la conexión con Firebase/Firestore y tu archivo <code>firebase.js</code>.</p></div>`;
   }
 })();
-
-/* Mini helper de selección por id */
-function $(sel){ return document.querySelector(sel); }
