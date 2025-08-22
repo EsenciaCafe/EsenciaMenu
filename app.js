@@ -1,87 +1,95 @@
-// === Configuración ===
-// Firebase (cliente)
+// app.js
+// Lee la carta desde Firestore y mantiene la estética con chips fijos (4 en una línea)
+
 import { db } from "./firebase.js";
-import { getDocs, getDoc, collection, doc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import {
+  getDocs, getDoc, collection, doc
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
-// Utilidad para formatear precios como "5,50 €" (formato España)
-const formatPrice = n => new Intl.NumberFormat('es-ES', {
-  style: 'currency',
-  currency: 'EUR',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2
-}).format(Number(n));
+/* ========= Utilidades ========= */
+const $$ = (sel, el = document) => el.querySelector(sel);
+const $$$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 
-// Inyección CSS en tiempo de ejecución para evitar salto entre cifra y símbolo de €
-(function applyRuntimeCSS(){
-  const style = document.createElement('style');
-  style.textContent = `.price{white-space:nowrap}`;
-  document.head.appendChild(style);
-})();
+const slug = (s="") =>
+  String(s).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^\w]+/g,'-').replace(/(^-|-$)/g,'');
 
-// --------- Chips de navegación (solo estos 4 grupos) ----------
-const GROUPS = ["Poffertjes", "Café", "Desayunos", "Bebidas"];
-
-// Mapeo sección -> grupo (se puede sobreescribir con "group" en menu.json)
-const SECTION_GROUP_MAP = {
-  // Poffertjes
-  "mini-pancakes": "Poffertjes",
-
-  // Desayunos
-  "tostas": "Desayunos",
-  "croissant": "Desayunos",
-  "sandwich": "Desayunos",
-  "extras-tostas": "Desayunos",
-
-  // Café (incluye especiales, matcha y tés calientes)
-  "cafe": "Café",
-  "especiales": "Café",
-  "matcha": "Café",
-  "te-caliente": "Café",
-  "extras-bebidas": "Café",
-
-  // Bebidas frías
-  "refrescos": "Bebidas",
-  "cervezas": "Bebidas",
-  "smoothies": "Bebidas",
-  "te-frio": "Bebidas",
-  "yogurt": "Bebidas"
+const formatPrice = (n) => {
+  // Acepta "3,50€", "3.50", number, etc. y devuelve "3,50 €"
+  if (typeof n === "number") {
+    return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' })
+      .format(n).replace(/\u00A0/g,' ');
+  }
+  if (typeof n === "string") {
+    // Normaliza separador y añade € si falta
+    const hasEuro = /€/.test(n);
+    let v = n.trim().replace(',', '.').replace(/[^\d.]/g, '');
+    const num = parseFloat(v);
+    if (!isNaN(num)) {
+      const out = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+      return hasEuro ? out + "€" : out + " €";
+    }
+    return n;
+  }
+  return "";
 };
 
-const groupOf = s => s.group || SECTION_GROUP_MAP[s.id] || "Otros";
+/* ========= Orden & Tabs ========= */
+// Orden y etiquetas de navegación (4 chips)
+const GROUPS = [
+  { id: "poffertjes", label: "Poffertjes" },
+  { id: "cafe",        label: "Café" },
+  { id: "desayunos",   label: "Desayunos" },
+  { id: "bebidas",     label: "Bebidas" },
+];
 
-function anchorId(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\w]+/g,'-').replace(/(^-|-$)/g,''); }
+const groupToId = (g) => {
+  const s = slug(g);
+  if (/^poff/.test(s)) return "poffertjes";
+  if (/^cafe/.test(s) || /^caf/.test(s)) return "cafe";
+  if (/^desayun/.test(s)) return "desayunos";
+  if (/^bebid/.test(s)) return "bebidas";
+  // fallback por si no cuadra
+  return s || "otros";
+};
 
+/* ========= Carga de datos (rápida) ========= */
 async function loadData(){
-  // Meta (settings/menu)
+  // Meta (opcional)
   let meta = {};
   try {
     const metaSnap = await getDoc(doc(collection(db, "settings"), "menu"));
     if (metaSnap.exists()) meta = metaSnap.data();
-  } catch(e){
+  } catch (e) {
     console.warn("No se pudo leer settings/menu:", e);
   }
 
-  // Secciones
-  const sections = [];
+  // Secciones (lectura principal)
   const secsSnap = await getDocs(collection(db, "sections"));
-  for (const secDoc of secsSnap.docs){
-    const sdata = secDoc.data();
-    const sid = secDoc.id;
 
-    // Subcolecciones
-    const itemsSnap = await getDocs(collection(db, "sections", sid, "items"));
-    const items = itemsSnap.docs.map(d=> d.data());
+  // Paraleliza subcolecciones para acelerar (items + toppings)
+  const sections = await Promise.all(
+    secsSnap.docs.map(async (secDoc) => {
+      const base = secDoc.data();
+      const sid  = secDoc.id;
 
-    const toppingsSnap = await getDocs(collection(db, "sections", sid, "toppings"));
-    const toppings = toppingsSnap.docs.map(d=> d.data());
+      const [itemsSnap, toppingsSnap] = await Promise.all([
+        getDocs(collection(db, "sections", sid, "items")).catch(()=>({docs:[]})),
+        getDocs(collection(db, "sections", sid, "toppings")).catch(()=>({docs:[]})),
+      ]);
 
-    sections.push({ id: sid, ...sdata, ...(items.length?{items}:{}) , ...(toppings.length?{toppings}:{}) });
-  }
+      const items    = itemsSnap.docs.map(d => d.data());
+      const toppings = toppingsSnap.docs.map(d => d.data());
 
-  // Orden opcional: primero por grupo (según GROUPS) y luego por título
+      return { id: sid, ...base, ...(items.length?{items}:{}) , ...(toppings.length?{toppings}:{}) };
+    })
+  );
+
+  // Orden: por GROUPS y luego por título
   sections.sort((a,b)=>{
-    const ga = GROUPS.indexOf(groupOf(a));
-    const gb = GROUPS.indexOf(groupOf(b));
+    const ga = GROUPS.findIndex(g => g.id === groupToId(a.group || a.title || a.id));
+    const gb = GROUPS.findIndex(g => g.id === groupToId(b.group || b.title || b.id));
     if (ga !== gb) return ga - gb;
     return (a.title||"").localeCompare(b.title||"", "es");
   });
@@ -89,157 +97,152 @@ async function loadData(){
   return { meta, sections };
 }
 
-function buildNavGroups(allSections){
-  const nav = document.getElementById("nav");
-  nav.innerHTML = "";
+/* ========= Render ========= */
+function buildNav(groupsAvailable){
+  const nav = $("#nav");
+  nav.innerHTML = GROUPS
+    .filter(g => groupsAvailable.includes(g.id)) // sólo muestra grupos que existen en Firestore
+    .map((g, i) => `
+      <a href="#${g.id}" class="${i===0 ? "active" : ""}" data-tab="${g.id}">
+        ${g.label}
+      </a>
+    `)
+    .join("");
 
-  // Chips por grupo (en el orden fijo de GROUPS)
-  GROUPS.forEach(g=>{
-    const has = allSections.some(s=> groupOf(s) === g && s.visible !== false);
-    if(!has) return;
-    const a = document.createElement("a");
-    a.href = "#";
-    a.textContent = g;
-    a.addEventListener("click",(e)=>{ e.preventDefault(); applyGroupFilter(g); setActive(a); });
-    nav.appendChild(a);
-  });
-
-  function setActive(el){
-    nav.querySelectorAll("a").forEach(x=>x.classList.remove("active"));
-    el.classList.add("active");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-}
-
-function applyGroupFilter(group){
-  document.querySelectorAll(".section").forEach(sec=>{
-    const g = sec.dataset.group || "Otros";
-    sec.style.display = (group === null || group === g) ? "" : "none";
+  // eventos
+  $$$("#nav a").forEach(a=>{
+    a.addEventListener("click", (e)=>{
+      e.preventDefault();
+      const tab = a.dataset.tab;
+      $$$("#nav a").forEach(x => x.classList.remove("active"));
+      a.classList.add("active");
+      renderTab(tab);
+    });
   });
 }
 
-function renderSimpleSection(s, container){
-  const sec = document.createElement("section");
-  sec.className = "section";
-  sec.id = s.id || anchorId(s.title);
+let STATE = {
+  meta: {},
+  sections: [],
+  byGroup: {},   // { groupId: [sections] }
+};
 
-  sec.innerHTML = `
-    <h2>${s.title}</h2>
-    ${s.subtitle ? `<div class="subtitle">${s.subtitle}</div>` : ""}
-    ${s.note ? `<div class="note">${s.note}</div>` : ""}
-    <div class="grid" role="list"></div>
-  `;
-
-  const grid = sec.querySelector(".grid");
-
-  // En "simple", puedes poner items directamente o agruparlos por tarjetas (cards)
-  if (s.items){
-    const card = document.createElement("div");
-    card.className = "card";
-    s.items.forEach(it=>{
-      const row = document.createElement("div");
-      row.className = "item";
-      row.innerHTML = `
-        <div class="item-head">
-          <span class="name">${it.name}</span>
-          <span class="price">${formatPrice(it.price)}</span>
-        </div>
-        ${it.desc ? `<div class="desc">${it.desc}</div>` : ""}
-      `;
-      card.appendChild(row);
-    });
-    grid.appendChild(card);
+function groupSections(sections){
+  const map = {};
+  for (const sec of sections) {
+    const gid = groupToId(sec.group || sec.title || sec.id);
+    if (!map[gid]) map[gid] = [];
+    map[gid].push(sec);
   }
-
-  if (s.cards){
-    s.cards.forEach(c=>{
-      const card = document.createElement("div");
-      card.className = "card";
-      if(c.title){ card.innerHTML = `<h3 style="margin:.2rem 0 .3rem">${c.title}</h3>`; }
-      (c.items||[]).forEach(it=>{
-        const row = document.createElement("div");
-        row.className = "item";
-        row.innerHTML = `
-          <div class="item-head">
-            <span class="name">${it.name}</span>
-            <span class="price">${formatPrice(it.price)}</span>
-          </div>
-          ${it.desc ? `<div class="desc">${it.desc}</div>` : ""}
-        `;
-        card.appendChild(row);
-      });
-      grid.appendChild(card);
-    });
-  }
-
-  container.appendChild(sec);
-  return sec;
+  return map;
 }
 
-function renderPancakesSection(s, container){
-  const sec = document.createElement("section");
-  sec.className = "section";
-  sec.id = s.id || anchorId(s.title);
-
-  sec.innerHTML = `
-    <h2>${s.title}</h2>
-    <div class="pancakes">
-      <div class="card">
-        <div class="item">
-          <div class="item-head">
-            <span class="name">${(s.base?.title) || "1 · Comienza con la base"}</span>
-            <span class="price">${formatPrice((s.base?.price) || 0)}</span>
-          </div>
-          ${s.base?.description ? `<div class="desc">${s.base.description}</div>` : ""}
-        </div>
-
-        <details class="dropdown" id="${sec.id}-dd">
-          <summary>Luego, elige tus toppings</summary>
-          <div class="dropdown-body" id="${sec.id}-toppings"></div>
-        </details>
-      </div>
-    </div>
-  `;
-
-  const topp = sec.querySelector(`#${sec.id}-toppings`);
-  (s.toppings||[]).forEach(t=>{
-    const row = document.createElement("div");
-    row.className = "item";
-    row.innerHTML = `
-      <div class="item-head">
-        <span class="name">${t.name}</span>
-        <span class="price">${t.free ? "Gratis" : formatPrice(t.price)}</span>
+function renderBaseAndToppings(sec){
+  let html = "";
+  if (sec.base && (sec.base.title || sec.base.description || sec.base.price)) {
+    const title = sec.base.title ? `<strong>${sec.base.title}</strong>` : "";
+    const desc  = sec.base.description ? sec.base.description : "";
+    const price = sec.base.price ? formatPrice(sec.base.price) : "";
+    html += `
+      <div class="note">
+        ${title}${title && (desc||price) ? " — " : ""}
+        ${desc}${desc && price ? " — " : ""}${price}
       </div>
     `;
-    topp.appendChild(row);
-  });
-
-  container.appendChild(sec);
-  return sec;
+  }
+  if (Array.isArray(sec.toppings) && sec.toppings.length) {
+    html += `
+      <div class="card">
+        <div class="title">Toppings</div>
+        <div class="muted">Elige los que quieras</div>
+        <div class="toppings">
+          ${sec.toppings.map(t => `<span class="badge">${t.name}${t.price ? " — " + formatPrice(t.price) : ""}</span>`).join("")}
+        </div>
+      </div>
+    `;
+  }
+  return html;
 }
 
-function mount(data){
-  document.getElementById("igic-note").textContent = data?.meta?.igic_note || "IGIC incluido";
-  const app = document.getElementById("app");
-  app.innerHTML = "";
+function renderItemsList(items=[]){
+  if (!items.length) return "";
+  return `
+    <div class="grid">
+      ${items.map(it => `
+        <div class="card">
+          <div class="title">
+            <span>${it.name || ""}</span>
+            <span style="float:right">${it.price ? formatPrice(it.price) : ""}</span>
+          </div>
+          ${it.desc ? `<div class="muted">${it.desc}</div>` : ""}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
 
-  const sections = data.sections || [];
-  buildNavGroups(sections);
+function renderSection(sec){
+  // Nota corta de sección
+  const subtitle = sec.subtitle ? `<div class="muted" style="margin:6px 0 10px">${sec.subtitle}</div>` : "";
+  const note     = sec.note ? `<div class="note">${sec.note}</div>` : "";
 
-  sections.filter(s=>s.visible!==false).forEach(s=>{
-    const type = s.type || "simple";
-    const el = (type === "mini_pancakes")
-      ? renderPancakesSection(s, app)
-      : renderSimpleSection(s, app);
+  // Para Poffertjes mostramos base + toppings arriba (si existen)
+  const isPoff = groupToId(sec.group || sec.title || sec.id) === "poffertjes";
+  const poffBlock = isPoff ? renderBaseAndToppings(sec) : "";
 
-    el.dataset.group = groupOf(s);
+  return `
+    <section class="section" id="${slug(sec.title || sec.id)}">
+      <h2>${sec.title || ""}</h2>
+      ${subtitle}
+      ${poffBlock || note}
+      ${renderItemsList(sec.items)}
+    </section>
+  `;
+}
+
+function renderTab(tabId){
+  const app = $("#app");
+  const sections = STATE.byGroup[tabId] || [];
+  app.innerHTML = sections.map(renderSection).join("") || `
+    <section class="section"><p class="muted">No hay elementos en esta categoría.</p></section>
+  `;
+
+  // Anti-overflow defensivo post-render
+  $$$(".grid .card .title").forEach(el => {
+    el.style.minWidth = "0";
   });
 }
 
-loadData()
-  .then(mount)
-  .catch(err=>{
+/* ========= Init ========= */
+(async ()=>{
+  const app = $("#app");
+  app.innerHTML = `<div class="loading">Cargando carta…</div>`;
+
+  try{
+    const { meta, sections } = await loadData();
+    STATE.meta = meta;
+    STATE.sections = sections;
+    STATE.byGroup = groupSections(sections);
+
+    // Construir nav con los grupos que realmente existen
+    const groupsAvailable = GROUPS
+      .map(g => g.id)
+      .filter(id => STATE.byGroup[id] && STATE.byGroup[id].length);
+    buildNav(groupsAvailable);
+
+    // Render inicial (primera pestaña disponible)
+    renderTab(groupsAvailable[0] || GROUPS[0].id);
+
+    // Nota IGIC si viene de meta
+    if (meta && meta.igic_note) {
+      const ig = $("#igic-note");
+      if (ig) ig.textContent = meta.igic_note;
+    }
+  }catch(err){
     console.error(err);
-    const app = document.getElementById("app");
     app.innerHTML = `<div class="section"><p>No se pudo cargar la carta. Revisa la conexión con Firebase/Firestore y tu archivo <code>firebase.js</code>.</p></div>`;
-  });
+  }
+})();
+
+/* Mini helper de selección por id */
+function $(sel){ return document.querySelector(sel); }
