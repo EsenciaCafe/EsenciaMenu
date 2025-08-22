@@ -1,5 +1,7 @@
 // === Configuración ===
-const DATA_URL = "menu.json"; // edita solo este archivo para cambiar la carta
+// Firebase (cliente)
+import { db } from "./firebase.js";
+import { getDocs, getDoc, collection, doc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 // Utilidad para formatear precios como "5,50 €" (formato España)
 const formatPrice = n => new Intl.NumberFormat('es-ES', {
@@ -50,22 +52,46 @@ const groupOf = s => s.group || SECTION_GROUP_MAP[s.id] || "Otros";
 function anchorId(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\w]+/g,'-').replace(/(^-|-$)/g,''); }
 
 async function loadData(){
-  const res = await fetch(DATA_URL, {cache:"no-store"});
-  if(!res.ok) throw new Error("No se pudo cargar menu.json");
-  return res.json();
+  // Meta (settings/menu)
+  let meta = {};
+  try {
+    const metaSnap = await getDoc(doc(collection(db, "settings"), "menu"));
+    if (metaSnap.exists()) meta = metaSnap.data();
+  } catch(e){
+    console.warn("No se pudo leer settings/menu:", e);
+  }
+
+  // Secciones
+  const sections = [];
+  const secsSnap = await getDocs(collection(db, "sections"));
+  for (const secDoc of secsSnap.docs){
+    const sdata = secDoc.data();
+    const sid = secDoc.id;
+
+    // Subcolecciones
+    const itemsSnap = await getDocs(collection(db, "sections", sid, "items"));
+    const items = itemsSnap.docs.map(d=> d.data());
+
+    const toppingsSnap = await getDocs(collection(db, "sections", sid, "toppings"));
+    const toppings = toppingsSnap.docs.map(d=> d.data());
+
+    sections.push({ id: sid, ...sdata, ...(items.length?{items}:{}) , ...(toppings.length?{toppings}:{}) });
+  }
+
+  // Orden opcional: primero por grupo (según GROUPS) y luego por título
+  sections.sort((a,b)=>{
+    const ga = GROUPS.indexOf(groupOf(a));
+    const gb = GROUPS.indexOf(groupOf(b));
+    if (ga !== gb) return ga - gb;
+    return (a.title||"").localeCompare(b.title||"", "es");
+  });
+
+  return { meta, sections };
 }
 
 function buildNavGroups(allSections){
   const nav = document.getElementById("nav");
   nav.innerHTML = "";
-
-  // Chip "Todas"
-  const chipAll = document.createElement("a");
-  chipAll.href = "#";
-  chipAll.textContent = "Todas";
-  chipAll.classList.add("active");
-  chipAll.addEventListener("click", (e)=>{ e.preventDefault(); applyGroupFilter(null); setActive(chipAll); });
-  nav.appendChild(chipAll);
 
   // Chips por grupo (en el orden fijo de GROUPS)
   GROUPS.forEach(g=>{
@@ -215,5 +241,5 @@ loadData()
   .catch(err=>{
     console.error(err);
     const app = document.getElementById("app");
-    app.innerHTML = `<div class="section"><p>No se pudo cargar la carta. Revisa <code>menu.json</code>.</p></div>`;
+    app.innerHTML = `<div class="section"><p>No se pudo cargar la carta. Revisa la conexión con Firebase/Firestore y tu archivo <code>firebase.js</code>.</p></div>`;
   });
