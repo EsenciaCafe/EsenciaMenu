@@ -1,5 +1,5 @@
 // app.multilang.js
-// Carta en ES/EN. Lee window.LOCALE (definido por index.html) y permite re-render en caliente.
+// Carta en ES/EN. Lee window.LOCALE y soporta etiquetas de categorías desde settings/menu.nav_labels
 
 import { db } from "./firebase.js";
 import {
@@ -10,9 +10,8 @@ import {
 let LOCALE = (window.LOCALE === "en") ? "en" : "es";
 window.__setLocale = (lang) => {
   LOCALE = (lang === "en") ? "en" : "es";
-  // Re-render pestaña activa
   const active = document.querySelector("#nav a.active")?.dataset.tab;
-  buildNav(Object.keys(STATE.byGroup)); // para refrescar etiquetas si hiciera falta
+  buildNav(Object.keys(STATE.byGroup));
   renderTab(active || "poffertjes");
 };
 
@@ -45,7 +44,7 @@ const formatPrice = (n) => {
 
 /* ========= Tabs ========= */
 const GROUPS = [
-  { id: "poffertjes", labelES: "Poffertjes", labelEN: "Poffertjes" },
+  { id: "poffertjes", labelES: "Poffertjes", labelEN: "Mini Pancakes" },
   { id: "cafe",        labelES: "Café",      labelEN: "Coffee" },
   { id: "desayunos",   labelES: "Desayunos", labelEN: "Breakfast" },
   { id: "bebidas",     labelES: "Bebidas",   labelEN: "Drinks" },
@@ -63,19 +62,31 @@ const groupToId = (g) => {
 /* ========= App state ========= */
 let STATE = { meta:{}, sections:[], byGroup:{} };
 
+/* === Utilidad: etiqueta de categoría desde settings/menu.nav_labels === */
+function getGroupLabel(id){
+  const map = STATE.meta?.nav_labels || {};
+  const i18n = map[id];
+  if (i18n) {
+    return (LOCALE === "en" ? (i18n.en || i18n.es) : (i18n.es || i18n.en)) || id;
+  }
+  const G = GROUPS.find(g=>g.id===id);
+  if (!G) return id;
+  return LOCALE==="en" ? (G.labelEN || G.labelES || id) : (G.labelES || G.labelEN || id);
+}
+
 /* ========= Carga ========= */
 async function loadData(){
   let meta = {};
   try {
     const metaSnap = await getDoc(doc(collection(db, "settings"), "menu"));
-    if (metaSnap.exists()) meta = metaSnap.data();
+    if (metaSnap.exists()) meta = metaSnap.data(); // aquí puede venir nav_labels
   } catch {}
 
   const secsSnap = await getDocs(collection(db, "sections"));
 
   const sections = await Promise.all(
     secsSnap.docs.map(async (secDoc) => {
-      const base = secDoc.data();  // incluye *_en si existen
+      const base = secDoc.data();
       const sid  = secDoc.id;
       const [itemsSnap, toppingsSnap] = await Promise.all([
         getDocs(collection(db, "sections", sid, "items")).catch(()=>({docs:[]})),
@@ -87,7 +98,6 @@ async function loadData(){
     })
   );
 
-  // ordenar secciones globalmente por grupo
   sections.sort((a,b)=>{
     const ga = GROUPS.findIndex(g => g.id === groupToId(a.group || a.title || a.id));
     const gb = GROUPS.findIndex(g => g.id === groupToId(b.group || b.title || b.id));
@@ -110,14 +120,11 @@ function groupSections(sections){
 /* ========= Render ========= */
 function buildNav(groupsAvailable){
   const nav = $("#nav");
-  nav.innerHTML = GROUPS
-    .filter(g => groupsAvailable.includes(g.id))
-    .map((g, i) => `
-      <a href="#${g.id}" class="${i===0 ? "active" : ""}" data-tab="${g.id}">
-        ${LOCALE === "en" ? g.labelEN : g.labelES}
-      </a>
-    `)
-    .join("");
+  nav.innerHTML = groupsAvailable.map((id, i)=>`
+    <a href="#${id}" class="${i===0 ? "active" : ""}" data-tab="${id}">
+      ${getGroupLabel(id)}
+    </a>
+  `).join("");
 
   $all("#nav a").forEach(a=>{
     a.addEventListener("click", (e)=>{
@@ -144,14 +151,12 @@ function renderBaseAndToppings(sec){
     `;
   }
   if (Array.isArray(sec.toppings) && sec.toppings.length) {
-    const tops = sec.toppings
-      .slice()
-      .sort((a,b)=>{
-        const ao = (typeof a.order === "number") ? a.order : 9999;
-        const bo = (typeof b.order === "number") ? b.order : 9999;
-        if (ao !== bo) return ao - bo;
-        return (a.name || a.name_en || "").localeCompare(b.name || b.name_en || "", "es");
-      });
+    const tops = sec.toppings.slice().sort((a,b)=>{
+      const ao = (typeof a.order === "number") ? a.order : 9999;
+      const bo = (typeof b.order === "number") ? b.order : 9999;
+      if (ao !== bo) return ao - bo;
+      return (a.name || a.name_en || "").localeCompare(b.name || b.name_en || "", "es");
+    });
 
     html += `
       <div class="card">
@@ -168,7 +173,6 @@ function renderBaseAndToppings(sec){
 
 function renderItemsList(items = []){
   if (!items.length) return "";
-
   const sorted = items.slice().sort((a,b)=>{
     const ao = (typeof a.order === "number") ? a.order : 9999;
     const bo = (typeof b.order === "number") ? b.order : 9999;
@@ -194,7 +198,6 @@ function renderItemsList(items = []){
 function renderSection(sec){
   const subtitle = pick(sec.subtitle, sec.subtitle_en);
   const note     = pick(sec.note, sec.note_en);
-
   const isPoff = groupToId(sec.group || sec.title || sec.id) === "poffertjes";
   const title = pick(sec.title, sec.title_en) || sec.title || "";
 
@@ -211,7 +214,6 @@ function renderSection(sec){
 function renderTab(tabId){
   const app = $("#app");
   let sections = STATE.byGroup[tabId] || [];
-
   sections = sections.slice().sort((a, b) => {
     const ao = (typeof a.order === "number") ? a.order : 9999;
     const bo = (typeof b.order === "number") ? b.order : 9999;
@@ -231,7 +233,7 @@ function renderTab(tabId){
 
   try{
     const { meta, sections } = await loadData();
-    STATE.meta = meta;
+    STATE.meta = meta || {};
     STATE.sections = sections;
     STATE.byGroup = groupSections(sections);
 
