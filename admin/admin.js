@@ -1,10 +1,9 @@
 // admin/admin.js
-// Editor con Auth (email/contraseña) + CRUD de secciones/items/toppings,
-// con 'order' y soporte multilenguaje manual (ES/EN) mediante *_en.
+// Editor CRUD con soporte multilenguaje y edición de nombres de categorías (settings/menu.nav_labels)
 
 import { db } from "../firebase.js";
 import {
-  doc, setDoc, updateDoc, deleteDoc,
+  doc, setDoc, updateDoc, deleteDoc, getDoc,
   collection, getDocs, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -91,7 +90,6 @@ async function loadSections(){
   const arr = await Promise.all(snap.docs.map(async d=>{
     const data = d.data();
     const id = d.id;
-    // Subcolecciones
     const [itemsSnap, toppingsSnap] = await Promise.all([
       getDocs(collection(db, "sections", id, "items")).catch(()=>({docs:[]})),
       getDocs(collection(db, "sections", id, "toppings")).catch(()=>({docs:[]})),
@@ -103,7 +101,7 @@ async function loadSections(){
   return arr;
 }
 
-/* ======= Nav ======= */
+/* ======= Nav + acciones ======= */
 function buildNav(){
   const nav = $("#nav");
   nav.innerHTML = GROUPS.map((g)=>`
@@ -123,7 +121,70 @@ function buildNav(){
     });
   });
 
+  // Barra de acciones del admin (si no existe, la creamos)
+  let actions = document.getElementById("admin-actions");
+  if (!actions){
+    actions = document.createElement("div");
+    actions.id = "admin-actions";
+    actions.style.display = "flex";
+    actions.style.gap = "8px";
+    actions.style.margin = "8px 0";
+    nav.parentElement?.insertBefore(actions, nav.nextSibling);
+  }
+  actions.innerHTML = `
+    <button class="btn accent" id="btn-add-section">+ Sección</button>
+    <button class="btn" id="btn-edit-cats">Editar nombres de categorías</button>
+  `;
+
   $("#btn-add-section").onclick = onAddSection;
+  $("#btn-edit-cats").onclick = onEditCategoryNames;
+}
+
+/* ======= Editar nombres de categorías (settings/menu.nav_labels) ======= */
+async function onEditCategoryNames(){
+  try{
+    const ref = doc(collection(db, "settings"), "menu");
+    const snap = await getDoc(ref);
+    const current = snap.exists() ? (snap.data().nav_labels || {}) : {};
+
+    const cur = (id, esDefault, enDefault) => {
+      const i = current[id] || {};
+      return { es: i.es || esDefault, en: i.en || enDefault };
+    };
+
+    const p = {
+      poffertjes: cur("poffertjes", "Poffertjes", "Mini Pancakes"),
+      cafe:       cur("cafe",       "Café",       "Coffee"),
+      desayunos:  cur("desayunos",  "Desayunos",  "Breakfast"),
+      bebidas:    cur("bebidas",    "Bebidas",    "Drinks"),
+    };
+
+    const es_poff = prompt("Nombre ES para 'poffertjes':", p.poffertjes.es); if (es_poff===null) return;
+    const en_poff = prompt("Nombre EN para 'poffertjes':", p.poffertjes.en); if (en_poff===null) return;
+
+    const es_cafe = prompt("Nombre ES para 'cafe':", p.cafe.es); if (es_cafe===null) return;
+    const en_cafe = prompt("Nombre EN para 'cafe':", p.cafe.en); if (en_cafe===null) return;
+
+    const es_des = prompt("Nombre ES para 'desayunos':", p.desayunos.es); if (es_des===null) return;
+    const en_des = prompt("Nombre EN para 'desayunos':", p.desayunos.en); if (en_des===null) return;
+
+    const es_beb = prompt("Nombre ES para 'bebidas':", p.bebidas.es); if (es_beb===null) return;
+    const en_beb = prompt("Nombre EN para 'bebidas':", p.bebidas.en); if (en_beb===null) return;
+
+    const nav_labels = {
+      poffertjes: { es: es_poff.trim(), en: en_poff.trim() },
+      cafe:       { es: es_cafe.trim(), en: en_cafe.trim() },
+      desayunos:  { es: es_des.trim(),  en: en_des.trim() },
+      bebidas:    { es: es_beb.trim(),  en: en_beb.trim() },
+    };
+
+    await setDoc(ref, { nav_labels }, { merge: true });
+    alert("Nombres de categorías actualizados.");
+    await reload();
+  }catch(e){
+    console.error(e);
+    alert("No se pudieron actualizar las categorías.");
+  }
 }
 
 /* ======= Render ======= */
@@ -132,7 +193,6 @@ function render(){
   const tab = STATE.activeTab;
   $("#group-title").textContent = `Editor — ${GROUPS.find(g=>g.id===tab)?.label||tab}`;
 
-  // Secciones del grupo: orden por `order`, luego título
   let sections = STATE.byGroup[tab] || [];
   sections = sections.slice().sort((a,b)=>{
     const ao = typeof a.order==="number" ? a.order : 9999;
@@ -145,7 +205,6 @@ function render(){
     <div class="note">No hay secciones en esta categoría.</div>
   `;
 
-  // Bind de acciones por sección
   sections.forEach(sec=>{
     $("#edit-sec-"+sec.id)?.addEventListener("click", ()=> onEditSection(sec));
     $("#del-sec-"+sec.id)?.addEventListener("click", ()=> onDeleteSection(sec));
@@ -153,13 +212,11 @@ function render(){
     $("#add-item-"+sec.id)?.addEventListener("click", ()=> onAddItem(sec));
     $("#add-top-"+sec.id)?.addEventListener("click", ()=> onAddTopping(sec));
 
-    // Items actions
     (sec.items||[]).forEach(it=>{
       $("#edit-item-"+sec.id+"-"+it.id)?.addEventListener("click", ()=> onEditItem(sec, it));
       $("#order-item-"+sec.id+"-"+it.id)?.addEventListener("click", ()=> onChangeItemOrder(sec, it));
       $("#del-item-"+sec.id+"-"+it.id)?.addEventListener("click", ()=> onDeleteItem(sec, it));
     });
-    // Toppings actions
     (sec.toppings||[]).forEach(tp=>{
       $("#edit-top-"+sec.id+"-"+tp.id)?.addEventListener("click", ()=> onEditTopping(sec, tp));
       $("#order-top-"+sec.id+"-"+tp.id)?.addEventListener("click", ()=> onChangeToppingOrder(sec, tp));
@@ -171,7 +228,6 @@ function render(){
 function sectionCard(sec){
   const hasBase = sec.base && (sec.base.title || sec.base.title_en || sec.base.description || sec.base.description_en || sec.base.price);
 
-  // Items ordenados en tarjeta
   const itemsSorted = (sec.items||[]).slice().sort((a,b)=>{
     const ao = typeof a.order==="number" ? a.order : 9999;
     const bo = typeof b.order==="number" ? b.order : 9999;
@@ -272,7 +328,6 @@ async function onAddSection(){
   const order = Number(orderStr);
   const id = slug(title);
 
-  // Base (opcional)
   let base = null;
   if (confirm("¿Quieres añadir BASE (título/desc/precio) ahora?")){
     const bTitle = prompt("Base: título (ES)", "");
@@ -338,10 +393,7 @@ async function onEditSection(sec){
 
   try{
     await updateDoc(doc(db, "sections", sec.id), {
-      title, title_en,
-      subtitle, subtitle_en,
-      note, note_en,
-      base,
+      title, title_en, subtitle, subtitle_en, note, note_en, base,
       updatedAt: serverTimestamp()
     });
     await reload();
@@ -350,6 +402,7 @@ async function onEditSection(sec){
   }
 }
 
+/* ======= Actions: Orden/Eliminar sección ======= */
 async function onDeleteSection(sec){
   if (!confirm(`Eliminar sección "${sec.title}" y TODO su contenido (items/toppings)?`)) return;
   try{
@@ -419,9 +472,7 @@ async function onEditItem(sec, it){
   const order = Number(orderStr);
   try{
     await updateDoc(doc(db, "sections", sec.id, "items", it.id), {
-      name, name_en,
-      desc, desc_en,
-      price,
+      name, name_en, desc, desc_en, price,
       order: isNaN(order) ? 9999 : order,
       updatedAt: serverTimestamp()
     });
@@ -487,8 +538,7 @@ async function onEditTopping(sec, tp){
   const order = Number(orderStr);
   try{
     await updateDoc(doc(db, "sections", sec.id, "toppings", tp.id), {
-      name, name_en,
-      price,
+      name, name_en, price,
       order: isNaN(order) ? 9999 : order,
       updatedAt: serverTimestamp()
     });
