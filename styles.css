@@ -149,3 +149,42 @@ img, video{ max-width:100%; height:auto; display:block; }
   box-shadow: var(--elev1);
   color:#374151;
 }
+
+/* ===== Admin: modal y formularios ===== */
+.modal-overlay{
+  position: fixed; inset: 0; background: rgba(0,0,0,.35);
+  display:flex; align-items:center; justify-content:center; z-index: 9999;
+}
+.modal{
+  width: min(720px, 92vw); background:#fff; border-radius:16px; box-shadow: var(--elev2, 0 10px 30px rgba(0,0,0,.15));
+  display:flex; flex-direction:column; max-height: 90vh;
+}
+.modal-head{
+  display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--line,#e5e7eb);
+}
+.modal-body{
+  padding:14px 16px; overflow:auto;
+}
+.modal-actions{
+  padding:12px 16px; display:flex; gap:8px; justify-content:flex-end; border-top:1px solid var(--line,#e5e7eb);
+}
+.form-row{ display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+.form-row label{ font-weight:600; }
+.form-row input, .form-row select, .form-row textarea{
+  border:1px solid #d1d5db; border-radius:10px; padding:10px 12px; font:inherit;
+}
+.form-row .chk{ display:flex; align-items:center; gap:8px; }
+.note-inline{ font-size:.85rem; color:#6b7280; }
+.btn-ghost{ border:none; background:transparent; cursor:pointer; font-size:18px; }
+
+/* barra de acciones del admin */
+.admin-actions{ display:flex; gap:8px; margin:8px 0; }
+
+/* ===== Logo más grande (página pública y/o admin) ===== */
+.logo-img{
+  max-height: 64px; /* antes era más pequeño; ajusta si quieres aún más grande */
+  height: auto; width: auto;
+}
+@media (min-width: 768px){
+  .logo-img{ max-height: 80px; }
+}
