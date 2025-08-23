@@ -4,63 +4,58 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Esencia — Carta</title>
-  <meta name="theme-color" content="#ffffff" />
-  <meta name="description" content="Carta de Esencia: cafés, mini pancakes, desayunos, bebidas. IGIC incluido." />
   <link rel="stylesheet" href="styles.css" />
   <style>
-    /* Landing */
-    .lang-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1rem;
-      margin-top: 2rem;
+    /* Layout header con chips arriba a la derecha */
+    .site-header{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; padding:12px 16px;
     }
-    .lang-btn {
-      font-size: 2rem; /* banderas grandes */
-      line-height: 1;
-      background: var(--chip, #f7f7f8);
-      border: 1px solid var(--line, #e5e7eb);
-      border-radius: var(--radius-lg, 18px);
-      padding: 1rem;
-      cursor: pointer;
-      transition: transform 0.1s;
-    }
-    .lang-btn:hover { transform: scale(1.05); }
+    .brand{display:flex; align-items:center; gap:12px}
+    .logo-img{max-height:64px; height:auto; width:auto}
 
-    /* Switch en carta */
-    .lang-switch {
-      display: flex;
-      gap: 6px;
+    .lang-switch{display:flex; gap:8px; align-items:center}
+    .lang-chip{
+      width:32px; height:32px; border-radius:999px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:18px; line-height:1;
+      border:1px solid var(--line, #e5e7eb); background:#fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,.06);
+      cursor:pointer; transition:transform .1s, box-shadow .2s, border-color .2s;
     }
-    .lang-chip {
-      font-size: 1.3rem;
-      line-height: 1;
-      padding: 6px 10px;
-      border-radius: var(--radius, 14px);
-      background: var(--chip, #f7f7f8);
-      border: 1px solid var(--line, #e5e7eb);
-      cursor: pointer;
-      transition: background 0.2s, transform 0.1s;
+    .lang-chip:hover{ transform: translateY(-1px); }
+    .lang-chip.active{ border-color: var(--accent, #b08968); box-shadow: 0 0 0 2px rgba(176,137,104,.15); }
+
+    @media(max-width:480px){ .lang-chip{ width:28px; height:28px; font-size:16px; } }
+
+    /* Landing básica */
+    .landing{max-width:980px; margin:24px auto; padding:0 16px; text-align:left;}
+    .lang-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px;}
+    .lang-btn{
+      font-size:1.5rem; line-height:1;
+      border-radius:16px; border:1px solid var(--line, #e5e7eb);
+      background:#f7f7f8; padding:14px; cursor:pointer;
     }
-    .lang-chip.active {
-      background: var(--accent, #b08968);
-      color: #fff;
-      transform: translateY(-1px);
-    }
+    @media(max-width:640px){ .lang-grid{ grid-template-columns:1fr; } }
+
+    .hidden{display:none !important;}
   </style>
 </head>
 <body>
   <header class="site-header">
-    <img src="logo.png" alt="Esencia" class="logo-img" />
-    <!-- Switch de idioma en carta -->
+    <div class="brand">
+      <img src="logo.png" alt="Esencia" class="logo-img" />
+      <span class="tag">Repostería casera — IGIC incluido</span>
+    </div>
+    <!-- chips pequeños arriba a la derecha -->
     <div id="lang-switch" class="lang-switch hidden" role="group" aria-label="Language switch">
       <button id="chip-es" class="lang-chip" aria-label="Español" title="Español">🇪🇸</button>
       <button id="chip-en" class="lang-chip" aria-label="English" title="English">🇬🇧</button>
     </div>
   </header>
 
-  <!-- Landing inicial -->
-  <main id="landing">
+  <!-- LANDING -->
+  <main id="landing" class="landing">
     <h1>Bienvenido a Esencia</h1>
     <p>Selecciona tu idioma:</p>
     <div class="lang-grid">
@@ -69,65 +64,69 @@
     </div>
   </main>
 
-  <!-- Carta -->
+  <!-- CARTA -->
   <main id="menu" class="hidden">
-    <nav id="nav" class="chips"></nav>
-    <div id="app"></div>
-    <footer><p id="igic-note">IGIC incluido</p></footer>
+    <nav id="nav" class="nav"></nav>
+    <div id="app" class="container"></div>
+    <footer class="site-footer"><small id="igic-note">IGIC incluido</small></footer>
   </main>
 
+  <!-- Firebase lo puedes dejar cargado global -->
   <script type="module" src="firebase.js"></script>
-  <script type="module" src="app.multilang.js"></script>
 
   <script>
+    // === CONTROL DE IDIOMA ===
     const landing = document.getElementById("landing");
     const menu = document.getElementById("menu");
     const switchEl = document.getElementById("lang-switch");
-    const btnEs = document.getElementById("btn-es");
-    const btnEn = document.getElementById("btn-en");
     const chipEs = document.getElementById("chip-es");
     const chipEn = document.getElementById("chip-en");
 
-    function showMenuWith(lang){
-      window.LOCALE = lang;
-      localStorage.setItem("lang", lang);
+    function setActiveChip(lang){
+      chipEs.classList.toggle("active", lang==="es");
+      chipEn.classList.toggle("active", lang==="en");
+    }
+
+    async function showMenuWith(lang){
+      window.LOCALE = (lang === "en") ? "en" : "es";
+      localStorage.setItem("lang", window.LOCALE);
       landing.classList.add("hidden");
       menu.classList.remove("hidden");
       switchEl.classList.remove("hidden");
-      if (lang === "es"){
-        chipEs.classList.add("active");
-        chipEn.classList.remove("active");
+      setActiveChip(window.LOCALE);
+
+      // Cargamos la carta SOLO una vez
+      if (!window.__menuLoaded) {
+        window.__menuLoaded = true;
+        const script = document.createElement("script");
+        script.type = "module";
+        script.src = "./app.multilang.js";
+        document.body.appendChild(script);
       } else {
-        chipEn.classList.add("active");
-        chipEs.classList.remove("active");
+        // Pedimos re-render en el nuevo idioma
+        window.__setLocale?.(window.LOCALE);
       }
-      // Forzar recarga del app.js
-      import(`./app.multilang.js?lang=${lang}&t=${Date.now()}`);
-      window.__menuLoaded = true;
     }
 
-    // Botones landing
-    btnEs.addEventListener("click", ()=> showMenuWith("es"));
-    btnEn.addEventListener("click", ()=> showMenuWith("en"));
+    // Landing
+    document.getElementById("btn-es").addEventListener("click", ()=> showMenuWith("es"));
+    document.getElementById("btn-en").addEventListener("click", ()=> showMenuWith("en"));
 
-    // Switch en carta
+    // Chips del header
     chipEs.addEventListener("click", ()=> showMenuWith("es"));
     chipEn.addEventListener("click", ()=> showMenuWith("en"));
 
-    // Idioma guardado
+    // Soporte ?lang=es|en
     const saved = localStorage.getItem("lang");
-
-    // Query param ?lang=es|en
     const qp = new URLSearchParams(location.search);
     const langQP = qp.get("lang");
-    if ((langQP === "es" || langQP === "en") && !saved) {
-      showMenuWith(langQP);
-    }
 
-    // Si hay guardado y no hay query param
-    if (!window.__menuLoaded && (saved === "es" || saved === "en") && !langQP) {
+    if (langQP === "es" || langQP === "en") {
+      showMenuWith(langQP);
+    } else if (saved === "es" || saved === "en") {
       showMenuWith(saved);
     }
+    // Si no hay nada, se queda en la landing esperando elección
   </script>
 </body>
 </html>
