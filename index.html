@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Esencia — Carta</title>
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="description" content="Carta de Esencia: cafés, mini pancakes, tostas, etc. IGIC incluido." />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* Estilos mínimos para la landing */
+    .landing {
+      max-width:980px; margin:36px auto; padding:0 16px; text-align:center;
+    }
+    .lang-grid {
+      display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:18px;
+    }
+    .lang-btn {
+      display:flex; align-items:center; justify-content:center;
+      gap:8px; padding:14px; border-radius:16px; border:1px solid var(--line);
+      background:#fff; box-shadow: var(--elev1); font-size:1.05rem;
+      cursor:pointer; text-decoration:none; color:var(--text);
+    }
+    .lang-btn:hover{ border-color:var(--accent); transform:translateY(-1px); transition:.15s ease; }
+    @media(max-width:640px){ .lang-grid{ grid-template-columns:1fr; } }
+    .muted-center{ color:var(--muted); margin-top:18px; }
+    /* Ocultar carta mientras no hay idioma */
+    .hidden { display:none !important; }
+    /* Botón para cambiar idioma luego */
+    .lang-switch{
+      margin-left:auto; display:flex; gap:6px; align-items:center;
+    }
+    .lang-chip{
+      padding:.35rem .6rem; border:1px solid var(--line); border-radius:999px;
+      background:#fff; cursor:pointer; font-size:.9rem; box-shadow:var(--elev1);
+    }
+    .lang-chip.active{ border-color:var(--accent); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand" style="display:flex; align-items:center; gap:12px">
+      <img src="logo letras.png" alt="Esencia" class="logo-img"
+           onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';" />
+      <span class="logo" style="display:none">Esencia</span>
+      <span class="tag">Repostería casera — IGIC incluido</span>
+
+      <!-- Switch de idioma (solo visible cuando se muestra la carta) -->
+      <div id="lang-switch" class="lang-switch hidden">
+        <button id="chip-es" class="lang-chip">ES</button>
+        <button id="chip-en" class="lang-chip">EN</button>
+      </div>
+    </div>
+    <nav id="nav" class="nav hidden"></nav>
+  </header>
+
+  <!-- LANDING -->
+  <main id="landing" class="landing">
+    <h1>¿Qué idioma prefieres?</h1>
+    <div class="lang-grid">
+      <button id="btn-es" class="lang-btn">🇪🇸 Español</button>
+      <button id="btn-en" class="lang-btn">🇬🇧 English</button>
+    </div>
+    <p class="muted-center">Guardaremos tu elección para próximas visitas.</p>
+  </main>
+
+  <!-- CARTA -->
+  <main id="app" class="container hidden" aria-live="polite"></main>
+
+  <footer class="site-footer">
+    <small id="igic-note">IGIC incluido</small>
+  </footer>
+
+  <script>
+    // 1) Detectar idioma previo
+    const saved = localStorage.getItem("locale");
+    const landing = document.getElementById("landing");
+    const appEl = document.getElementById("app");
+    const navEl = document.getElementById("nav");
+    const switchEl = document.getElementById("lang-switch");
+    const chipES = document.getElementById("chip-es");
+    const chipEN = document.getElementById("chip-en");
+
+    function applyActiveChip() {
+      chipES.classList.toggle("active", window.LOCALE === "es");
+      chipEN.classList.toggle("active", window.LOCALE === "en");
+    }
+
+    function showMenuWith(lang){
+      window.LOCALE = lang === "en" ? "en" : "es";
+      localStorage.setItem("locale", window.LOCALE);
+
+      // Mostrar carta, ocultar landing
+      landing.classList.add("hidden");
+      appEl.classList.remove("hidden");
+      navEl.classList.remove("hidden");
+      switchEl.classList.remove("hidden");
+      applyActiveChip();
+
+      // Cargar módulo de la carta una única vez (si ya existe, re-renderiza)
+      if (!window.__menuLoaded) {
+        window.__menuLoaded = true;
+        const script = document.createElement("script");
+        script.type = "module";
+        script.src = "./app.multilang.js";
+        document.body.appendChild(script);
+      } else {
+        // Si ya cargó, pedimos un re-render en el nuevo idioma
+        window.__setLocale?.(window.LOCALE);
+      }
+    }
+
+    // Elección en landing
+    document.getElementById("btn-es").addEventListener("click", ()=> showMenuWith("es"));
+    document.getElementById("btn-en").addEventListener("click", ()=> showMenuWith("en"));
+
+    // Cambiar idioma ya dentro de la carta
+    chipES.addEventListener("click", ()=> showMenuWith("es"));
+    chipEN.addEventListener("click", ()=> showMenuWith("en"));
+
+    // Si había idioma guardado, entra directo
+    if (saved === "es" || saved === "en") {
+      showMenuWith(saved);
+    }
+  </script>
+</body>
+</html>
