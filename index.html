@@ -75,58 +75,47 @@
   <script type="module" src="firebase.js"></script>
 
   <script>
-    // === CONTROL DE IDIOMA ===
-    const landing = document.getElementById("landing");
-    const menu = document.getElementById("menu");
-    const switchEl = document.getElementById("lang-switch");
-    const chipEs = document.getElementById("chip-es");
-    const chipEn = document.getElementById("chip-en");
+  // Elementos
+  const landing  = document.getElementById("landing");
+  const menu     = document.getElementById("menu");
+  const switchEl = document.getElementById("lang-switch");
+  const chipEs   = document.getElementById("chip-es");
+  const chipEn   = document.getElementById("chip-en");
 
-    function setActiveChip(lang){
-      chipEs.classList.toggle("active", lang==="es");
-      chipEn.classList.toggle("active", lang==="en");
+  function setActiveChip(lang){
+    chipEs.classList.toggle("active", lang==="es");
+    chipEn.classList.toggle("active", lang==="en");
+  }
+
+  // Mostrar carta SOLO cuando el usuario elige
+  function showMenuWith(lang){
+    window.LOCALE = (lang === "en") ? "en" : "es";
+    landing.classList.add("hidden");
+    menu.classList.remove("hidden");
+    switchEl.classList.remove("hidden");
+    setActiveChip(window.LOCALE);
+
+    if (!window.__menuLoaded) {
+      window.__menuLoaded = true;
+      const script = document.createElement("script");
+      script.type = "module";
+      script.src = "./app.multilang.js";
+      document.body.appendChild(script);
+    } else {
+      window.__setLocale?.(window.LOCALE);
     }
+  }
 
-    async function showMenuWith(lang){
-      window.LOCALE = (lang === "en") ? "en" : "es";
-      localStorage.setItem("lang", window.LOCALE);
-      landing.classList.add("hidden");
-      menu.classList.remove("hidden");
-      switchEl.classList.remove("hidden");
-      setActiveChip(window.LOCALE);
+  // Click en banderas (landing)
+  document.getElementById("btn-es").addEventListener("click", ()=> showMenuWith("es"));
+  document.getElementById("btn-en").addEventListener("click", ()=> showMenuWith("en"));
 
-      // Cargamos la carta SOLO una vez
-      if (!window.__menuLoaded) {
-        window.__menuLoaded = true;
-        const script = document.createElement("script");
-        script.type = "module";
-        script.src = "./app.multilang.js";
-        document.body.appendChild(script);
-      } else {
-        // Pedimos re-render en el nuevo idioma
-        window.__setLocale?.(window.LOCALE);
-      }
-    }
+  // Chips del header (cambiar idioma dentro de la carta)
+  chipEs.addEventListener("click", ()=> showMenuWith("es"));
+  chipEn.addEventListener("click", ()=> showMenuWith("en"));
 
-    // Landing
-    document.getElementById("btn-es").addEventListener("click", ()=> showMenuWith("es"));
-    document.getElementById("btn-en").addEventListener("click", ()=> showMenuWith("en"));
-
-    // Chips del header
-    chipEs.addEventListener("click", ()=> showMenuWith("es"));
-    chipEn.addEventListener("click", ()=> showMenuWith("en"));
-
-    // Soporte ?lang=es|en
-    const saved = localStorage.getItem("lang");
-    const qp = new URLSearchParams(location.search);
-    const langQP = qp.get("lang");
-
-    if (langQP === "es" || langQP === "en") {
-      showMenuWith(langQP);
-    } else if (saved === "es" || saved === "en") {
-      showMenuWith(saved);
-    }
-    // Si no hay nada, se queda en la landing esperando elección
-  </script>
+  // Importante: no leemos ni guardamos preferencia
+  // -> Siempre se queda en la landing hasta que el usuario elige.
+</script>
 </body>
 </html>
