@@ -4,7 +4,7 @@
 
 import { db } from "../firebase.js";
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc,
+  doc, setDoc, updateDoc, deleteDoc,
   collection, getDocs, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -290,12 +290,14 @@ async function onAddSection(){
   }
 
   const data = {
-    title, ...(title_en?{title_en}:{});
+    title,
+    ...(title_en ? { title_en } : {}),
     subtitle: subtitle || undefined,
     ...(subtitle_en ? { subtitle_en } : {}),
     note: note || undefined,
     ...(note_en ? { note_en } : {}),
-    group, order: isNaN(order)? 9999 : order,
+    group,
+    order: isNaN(order) ? 9999 : order,
     ...(base ? { base } : {}),
     createdAt: serverTimestamp(), updatedAt: serverTimestamp()
   };
@@ -392,7 +394,8 @@ async function onAddItem(sec){
 
   try{
     await addDoc(collection(db, "sections", sec.id, "items"), {
-      name, ...(name_en?{name_en}:{});
+      name,
+      ...(name_en ? { name_en } : {}),
       desc: desc || undefined,
       ...(desc_en ? { desc_en } : {}),
       price,
@@ -447,7 +450,7 @@ async function onChangeItemOrder(sec, it){
       order: isNaN(order) ? 9999 : order,
       updatedAt: serverTimestamp()
     });
-  await reload();
+    await reload();
   }catch(e){
     console.error(e); alert("No se pudo actualizar el orden del item.");
   }
@@ -463,7 +466,8 @@ async function onAddTopping(sec){
   const order = Number(orderStr);
   try{
     await addDoc(collection(db, "sections", sec.id, "toppings"), {
-      name, ...(name_en?{name_en}:{});
+      name,
+      ...(name_en ? { name_en } : {}),
       price,
       order: isNaN(order) ? 9999 : order,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp()
