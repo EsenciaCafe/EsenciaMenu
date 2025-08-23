@@ -1,5 +1,6 @@
 // admin/admin.js
-// Editor CRUD con soporte multilenguaje y edición de nombres de categorías (settings/menu.nav_labels)
+// Editor CRUD con formularios (sin prompt), soporte ES/EN, order, toppings,
+// y edición de nombres de categorías (settings/menu.nav_labels) con un formulario.
 
 import { db } from "../firebase.js";
 import {
@@ -11,13 +12,117 @@ import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
-/* ======= UI helpers ======= */
+/* ======= Helpers UI ======= */
 const $ = (s, el=document)=> el.querySelector(s);
 const $$ = (s, el=document)=> [...el.querySelectorAll(s)];
 const slug = (s="") =>
   String(s).toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^\w]+/g,'-').replace(/(^-|-$)/g,'');
+
+/* ======= Modal/Form genérico ======= */
+// openForm({title, fields, submitLabel, initial}) -> Promise<object|null>
+function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[] }){
+  return new Promise(resolve=>{
+    // overlay
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="modal-head">
+          <h3>${title}</h3>
+          <button class="btn-ghost" id="form-close" aria-label="Cerrar">✕</button>
+        </div>
+        <form class="modal-body" id="form-body"></form>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="form-cancel">Cancelar</button>
+          <button type="submit" class="btn accent" id="form-submit">${submitLabel}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const form = overlay.querySelector("#form-body");
+    // build fields
+    fields.forEach(f=>{
+      const row = document.createElement("div");
+      row.className = "form-row";
+      const id = `fld-${f.name}`;
+
+      let control = "";
+      if (f.type === "select"){
+        control = `<select id="${id}" name="${f.name}">${(f.options||[]).map(o=>`
+          <option value="${o.value}">${o.label}</option>`).join("")}</select>`;
+      } else if (f.type === "textarea"){
+        control = `<textarea id="${id}" name="${f.name}" rows="${f.rows||3}" placeholder="${f.placeholder||""}"></textarea>`;
+      } else if (f.type === "checkbox"){
+        control = `<label class="chk">
+          <input type="checkbox" id="${id}" name="${f.name}">
+          <span>${f.help||""}</span>
+        </label>`;
+      } else {
+        control = `<input id="${id}" name="${f.name}" type="${f.type||"text"}" placeholder="${f.placeholder||""}">`;
+      }
+
+      row.innerHTML = `
+        ${f.type==="checkbox" ? "" : `<label for="${id}">${f.label||f.name}</label>`}
+        ${control}
+        ${f.note ? `<div class="note-inline">${f.note}</div>`:""}
+      `;
+      form.appendChild(row);
+
+      // set initial
+      const el = row.querySelector("#"+id);
+      const val = initial[f.name];
+      if (f.type === "checkbox"){
+        el.checked = !!val;
+      } else if (val!=null){
+        el.value = String(val);
+      }
+      // show/hide by dependsOn
+      if (f.dependsOn){
+        const dep = f.dependsOn;
+        const depEl = overlay.querySelector(`[name="${dep.name}"]`);
+        const toggle = ()=>{
+          const ok = dep.when( depEl.type==="checkbox" ? depEl.checked : depEl.value );
+          row.style.display = ok ? "" : "none";
+        };
+        depEl.addEventListener("input", toggle);
+        depEl.addEventListener("change", toggle);
+        toggle();
+      }
+    });
+
+    const close = ()=>{ overlay.remove(); };
+    overlay.querySelector("#form-close").onclick = ()=>{ close(); resolve(null); };
+    overlay.querySelector("#form-cancel").onclick = ()=>{ close(); resolve(null); };
+    overlay.addEventListener("click", e=>{
+      if (e.target === overlay){ close(); resolve(null); }
+    });
+
+    overlay.querySelector("#form-submit").onclick = (e)=>{
+      e.preventDefault();
+      const data = {};
+      fields.forEach(f=>{
+        const el = overlay.querySelector(`[name="${f.name}"]`);
+        if (!el) return;
+        if (f.type==="checkbox"){
+          data[f.name] = !!el.checked;
+        } else {
+          const v = el.value.trim();
+          if (f.type==="number"){
+            const num = Number(v);
+            data[f.name] = isNaN(num) ? (v===""? "" : v) : num;
+          } else {
+            data[f.name] = v;
+          }
+        }
+      });
+      resolve(data);
+      close();
+    };
+  });
+}
 
 /* ======= Constantes ======= */
 const GROUPS = [
@@ -121,14 +226,12 @@ function buildNav(){
     });
   });
 
-  // Barra de acciones del admin (si no existe, la creamos)
+  // Barra de acciones del admin
   let actions = document.getElementById("admin-actions");
   if (!actions){
     actions = document.createElement("div");
     actions.id = "admin-actions";
-    actions.style.display = "flex";
-    actions.style.gap = "8px";
-    actions.style.margin = "8px 0";
+    actions.className = "admin-actions";
     nav.parentElement?.insertBefore(actions, nav.nextSibling);
   }
   actions.innerHTML = `
@@ -140,42 +243,46 @@ function buildNav(){
   $("#btn-edit-cats").onclick = onEditCategoryNames;
 }
 
-/* ======= Editar nombres de categorías (settings/menu.nav_labels) ======= */
+/* ======= Form: Editar nombres de categorías ======= */
 async function onEditCategoryNames(){
   try{
     const ref = doc(collection(db, "settings"), "menu");
     const snap = await getDoc(ref);
     const current = snap.exists() ? (snap.data().nav_labels || {}) : {};
 
-    const cur = (id, esDefault, enDefault) => {
-      const i = current[id] || {};
-      return { es: i.es || esDefault, en: i.en || enDefault };
+    const initial = {
+      poff_es: current.poffertjes?.es ?? "Poffertjes",
+      poff_en: current.poffertjes?.en ?? "Mini Pancakes",
+      cafe_es: current.cafe?.es ?? "Café",
+      cafe_en: current.cafe?.en ?? "Coffee",
+      des_es:  current.desayunos?.es ?? "Desayunos",
+      des_en:  current.desayunos?.en ?? "Breakfast",
+      beb_es:  current.bebidas?.es ?? "Bebidas",
+      beb_en:  current.bebidas?.en ?? "Drinks",
     };
 
-    const p = {
-      poffertjes: cur("poffertjes", "Poffertjes", "Mini Pancakes"),
-      cafe:       cur("cafe",       "Café",       "Coffee"),
-      desayunos:  cur("desayunos",  "Desayunos",  "Breakfast"),
-      bebidas:    cur("bebidas",    "Bebidas",    "Drinks"),
-    };
-
-    const es_poff = prompt("Nombre ES para 'poffertjes':", p.poffertjes.es); if (es_poff===null) return;
-    const en_poff = prompt("Nombre EN para 'poffertjes':", p.poffertjes.en); if (en_poff===null) return;
-
-    const es_cafe = prompt("Nombre ES para 'cafe':", p.cafe.es); if (es_cafe===null) return;
-    const en_cafe = prompt("Nombre EN para 'cafe':", p.cafe.en); if (en_cafe===null) return;
-
-    const es_des = prompt("Nombre ES para 'desayunos':", p.desayunos.es); if (es_des===null) return;
-    const en_des = prompt("Nombre EN para 'desayunos':", p.desayunos.en); if (en_des===null) return;
-
-    const es_beb = prompt("Nombre ES para 'bebidas':", p.bebidas.es); if (es_beb===null) return;
-    const en_beb = prompt("Nombre EN para 'bebidas':", p.bebidas.en); if (en_beb===null) return;
+    const data = await openForm({
+      title: "Editar nombres de categorías",
+      submitLabel: "Guardar",
+      initial,
+      fields: [
+        { name:"poff_es", label:"Poffertjes (ES)" },
+        { name:"poff_en", label:"Poffertjes (EN)" },
+        { name:"cafe_es", label:"Café (ES)" },
+        { name:"cafe_en", label:"Café (EN)" },
+        { name:"des_es",  label:"Desayunos (ES)" },
+        { name:"des_en",  label:"Desayunos (EN)" },
+        { name:"beb_es",  label:"Bebidas (ES)" },
+        { name:"beb_en",  label:"Bebidas (EN)" },
+      ]
+    });
+    if (!data) return;
 
     const nav_labels = {
-      poffertjes: { es: es_poff.trim(), en: en_poff.trim() },
-      cafe:       { es: es_cafe.trim(), en: en_cafe.trim() },
-      desayunos:  { es: es_des.trim(),  en: en_des.trim() },
-      bebidas:    { es: es_beb.trim(),  en: en_beb.trim() },
+      poffertjes: { es: data.poff_es.trim(), en: data.poff_en.trim() },
+      cafe:       { es: data.cafe_es.trim(), en: data.cafe_en.trim() },
+      desayunos:  { es: data.des_es.trim(),  en: data.des_en.trim() },
+      bebidas:    { es: data.beb_es.trim(),  en: data.beb_en.trim() },
     };
 
     await setDoc(ref, { nav_labels }, { merge: true });
@@ -313,52 +420,60 @@ function sectionCard(sec){
   `;
 }
 
-/* ======= Actions: Secciones ======= */
+/* ======= Formularios CRUD ======= */
 async function onAddSection(){
-  const group = prompt("¿En qué grupo? (Poffertjes, Café, Desayunos, Bebidas)");
-  if (!group) return;
-  const title = prompt("Título de la sección (ES, ej: Tostas)");
-  if (!title) return;
-  const title_en = prompt("Title (EN) — opcional", "");
-  const subtitle = prompt("Subtítulo (ES) — opcional", "");
-  const subtitle_en = subtitle ? prompt("Subtitle (EN) — opcional", "") : "";
-  const note = prompt("Nota (ES) — opcional", "");
-  const note_en = note ? prompt("Note (EN) — opcional", "") : "";
-  const orderStr = prompt("Orden (número, menor aparece primero)", "1");
-  const order = Number(orderStr);
-  const id = slug(title);
+  const data = await openForm({
+    title: "Nueva sección",
+    submitLabel: "Crear",
+    initial: { group:"Desayunos", title:"", title_en:"", subtitle:"", subtitle_en:"", note:"", note_en:"", order:1, base_enable:false, base_title:"", base_title_en:"", base_desc:"", base_desc_en:"", base_price:"" },
+    fields: [
+      { name:"group", label:"Grupo", type:"select", options:[
+        {value:"Poffertjes", label:"Poffertjes"},
+        {value:"Café", label:"Café"},
+        {value:"Desayunos", label:"Desayunos"},
+        {value:"Bebidas", label:"Bebidas"},
+      ]},
+      { name:"title", label:"Título (ES)" },
+      { name:"title_en", label:"Title (EN)", placeholder:"Opcional" },
+      { name:"subtitle", label:"Subtítulo (ES)", placeholder:"Opcional" },
+      { name:"subtitle_en", label:"Subtitle (EN)", placeholder:"Opcional" },
+      { name:"note", label:"Nota (ES)", placeholder:"Opcional" },
+      { name:"note_en", label:"Note (EN)", placeholder:"Opcional" },
+      { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+      { name:"base_enable", type:"checkbox", help:"Añadir BASE (título/desc/precio)" },
+      { name:"base_title", label:"Base · Título (ES)", dependsOn:{name:"base_enable", when:v=>!!v} },
+      { name:"base_title_en", label:"Base · Title (EN)", placeholder:"Opcional", dependsOn:{name:"base_enable", when:v=>!!v} },
+      { name:"base_desc", label:"Base · Descripción (ES)", type:"textarea", rows:2, dependsOn:{name:"base_enable", when:v=>!!v} },
+      { name:"base_desc_en", label:"Base · Description (EN)", type:"textarea", rows:2, placeholder:"Opcional", dependsOn:{name:"base_enable", when:v=>!!v} },
+      { name:"base_price", label:"Base · Precio", placeholder:"ej: 3.50", dependsOn:{name:"base_enable", when:v=>!!v} },
+    ]
+  });
+  if (!data) return;
 
-  let base = null;
-  if (confirm("¿Quieres añadir BASE (título/desc/precio) ahora?")){
-    const bTitle = prompt("Base: título (ES)", "");
-    const bTitleEn = bTitle ? prompt("Base: title (EN) — opcional", "") : "";
-    const bDesc = prompt("Base: descripción (ES)", "");
-    const bDescEn = bDesc ? prompt("Base: description (EN) — opcional", "") : "";
-    const bPrice = prompt("Base: precio (ej: 3,50 €)", "");
-    base = {
-      ...(bTitle ? { title: bTitle } : {}),
-      ...(bTitleEn ? { title_en: bTitleEn } : {}),
-      ...(bDesc ? { description: bDesc } : {}),
-      ...(bDescEn ? { description_en: bDescEn } : {}),
-      ...(bPrice ? { price: bPrice } : {}),
-    };
-  }
+  const id = slug(data.title);
+  const base = data.base_enable ? {
+    ...(data.base_title ? { title: data.base_title } : {}),
+    ...(data.base_title_en ? { title_en: data.base_title_en } : {}),
+    ...(data.base_desc ? { description: data.base_desc } : {}),
+    ...(data.base_desc_en ? { description_en: data.base_desc_en } : {}),
+    ...(data.base_price ? { price: data.base_price } : {}),
+  } : null;
 
-  const data = {
-    title,
-    ...(title_en ? { title_en } : {}),
-    subtitle: subtitle || undefined,
-    ...(subtitle_en ? { subtitle_en } : {}),
-    note: note || undefined,
-    ...(note_en ? { note_en } : {}),
-    group,
-    order: isNaN(order) ? 9999 : order,
+  const payload = {
+    title: data.title,
+    ...(data.title_en ? { title_en: data.title_en } : {}),
+    subtitle: data.subtitle || undefined,
+    ...(data.subtitle_en ? { subtitle_en: data.subtitle_en } : {}),
+    note: data.note || undefined,
+    ...(data.note_en ? { note_en: data.note_en } : {}),
+    group: data.group,
+    order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
     ...(base ? { base } : {}),
     createdAt: serverTimestamp(), updatedAt: serverTimestamp()
   };
 
   try{
-    await setDoc(doc(db, "sections", id), data, { merge: true });
+    await setDoc(doc(db, "sections", id), payload, { merge: true });
     await reload();
   }catch(e){
     console.error(e); alert("No se pudo crear sección.");
@@ -366,34 +481,68 @@ async function onAddSection(){
 }
 
 async function onEditSection(sec){
-  const title = prompt("Título (ES)", sec.title || "");
-  if (!title) return;
-  const title_en = prompt("Title (EN) — opcional", sec.title_en || "");
-  const subtitle = prompt("Subtítulo (ES) — opcional", sec.subtitle || "");
-  const subtitle_en = prompt("Subtitle (EN) — opcional", sec.subtitle_en || "");
-  const note = prompt("Nota (ES) — opcional", sec.note || "");
-  const note_en = prompt("Note (EN) — opcional", sec.note_en || "");
+  const data = await openForm({
+    title: `Editar sección: ${sec.title}`,
+    submitLabel: "Guardar",
+    initial: {
+      group: sec.group || "Desayunos",
+      title: sec.title || "",
+      title_en: sec.title_en || "",
+      subtitle: sec.subtitle || "",
+      subtitle_en: sec.subtitle_en || "",
+      note: sec.note || "",
+      note_en: sec.note_en || "",
+      order: typeof sec.order==="number"? sec.order : 1,
+      base_enable: !!sec.base,
+      base_title: sec.base?.title || "",
+      base_title_en: sec.base?.title_en || "",
+      base_desc: sec.base?.description || "",
+      base_desc_en: sec.base?.description_en || "",
+      base_price: sec.base?.price || "",
+    },
+    fields: [
+      { name:"group", label:"Grupo", type:"select", options:[
+        {value:"Poffertjes", label:"Poffertjes"},
+        {value:"Café", label:"Café"},
+        {value:"Desayunos", label:"Desayunos"},
+        {value:"Bebidas", label:"Bebidas"},
+      ]},
+      { name:"title", label:"Título (ES)" },
+      { name:"title_en", label:"Title (EN)", placeholder:"Opcional" },
+      { name:"subtitle", label:"Subtítulo (ES)", placeholder:"Opcional" },
+      { name:"subtitle_en", label:"Subtitle (EN)", placeholder:"Opcional" },
+      { name:"note", label:"Nota (ES)", placeholder:"Opcional" },
+      { name:"note_en", label:"Note (EN)", placeholder:"Opcional" },
+      { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+      { name:"base_enable", type:"checkbox", help:"Editar BASE (título/desc/precio)" },
+      { name:"base_title", label:"Base · Título (ES)", dependsOn:{name:"base_enable", when:v=>!!v} },
+      { name:"base_title_en", label:"Base · Title (EN)", placeholder:"Opcional", dependsOn:{name:"base_enable", when:v=>!!v} },
+      { name:"base_desc", label:"Base · Descripción (ES)", type:"textarea", rows:2, dependsOn:{name:"base_enable", when:v=>!!v} },
+      { name:"base_desc_en", label:"Base · Description (EN)", type:"textarea", rows:2, placeholder:"Opcional", dependsOn:{name:"base_enable", when:v=>!!v} },
+      { name:"base_price", label:"Base · Precio", placeholder:"ej: 3.50", dependsOn:{name:"base_enable", when:v=>!!v} },
+    ]
+  });
+  if (!data) return;
 
-  let base = sec.base || {};
-  if (confirm("¿Editar BASE (título/desc/precio)?")){
-    const bTitle = prompt("Base: título (ES)", base.title || "");
-    const bTitleEn = prompt("Base: title (EN) — opcional", base.title_en || "");
-    const bDesc  = prompt("Base: descripción (ES)", base.description || "");
-    const bDescEn  = prompt("Base: description (EN) — opcional", base.description_en || "");
-    const bPrice = prompt("Base: precio", base.price || "");
-
-    base = {
-      ...(bTitle ? { title: bTitle } : { title: "" }),
-      ...(bTitleEn ? { title_en: bTitleEn } : { title_en: "" }),
-      ...(bDesc ? { description: bDesc } : { description: "" }),
-      ...(bDescEn ? { description_en: bDescEn } : { description_en: "" }),
-      ...(bPrice ? { price: bPrice } : { price: "" }),
-    };
-  }
+  const base = data.base_enable ? {
+    ...(data.base_title ? { title: data.base_title } : { title: "" }),
+    ...(data.base_title_en ? { title_en: data.base_title_en } : { title_en: "" }),
+    ...(data.base_desc ? { description: data.base_desc } : { description: "" }),
+    ...(data.base_desc_en ? { description_en: data.base_desc_en } : { description_en: "" }),
+    ...(data.base_price ? { price: data.base_price } : { price: "" }),
+  } : null;
 
   try{
     await updateDoc(doc(db, "sections", sec.id), {
-      title, title_en, subtitle, subtitle_en, note, note_en, base,
+      title: data.title,
+      title_en: data.title_en || "",
+      subtitle: data.subtitle || "",
+      subtitle_en: data.subtitle_en || "",
+      note: data.note || "",
+      note_en: data.note_en || "",
+      group: data.group,
+      order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+      ...(data.base_enable ? { base } : { base: null }),
       updatedAt: serverTimestamp()
     });
     await reload();
@@ -402,7 +551,6 @@ async function onEditSection(sec){
   }
 }
 
-/* ======= Actions: Orden/Eliminar sección ======= */
 async function onDeleteSection(sec){
   if (!confirm(`Eliminar sección "${sec.title}" y TODO su contenido (items/toppings)?`)) return;
   try{
@@ -420,9 +568,14 @@ async function onDeleteSection(sec){
 }
 
 async function onChangeSectionOrder(sec){
-  const nv = prompt("Nuevo orden (número):", typeof sec.order==="number"? String(sec.order):"1");
-  if (nv==null) return;
-  const order = Number(nv);
+  const data = await openForm({
+    title: `Orden de: ${sec.title}`,
+    submitLabel: "Guardar",
+    initial: { order: typeof sec.order==="number" ? sec.order : 1 },
+    fields: [ { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" } ]
+  });
+  if (!data) return;
+  const order = Number(data.order);
   try{
     await updateDoc(doc(db, "sections", sec.id), {
       order: isNaN(order)? 9999 : order,
@@ -434,25 +587,31 @@ async function onChangeSectionOrder(sec){
   }
 }
 
-/* ======= Actions: Items ======= */
+/* ======= Items ======= */
 async function onAddItem(sec){
-  const name = prompt("Nombre del item (ES)");
-  if (!name) return;
-  const name_en = prompt("Item name (EN) — opcional", "");
-  const desc = prompt("Descripción (ES) — opcional", "");
-  const desc_en = desc ? prompt("Description (EN) — opcional", "") : "";
-  const price = prompt("Precio (ej: 3,50 €)", "");
-  const orderStr = prompt("Orden (número, menor aparece primero)", "1");
-  const order = Number(orderStr);
+  const data = await openForm({
+    title: `Nuevo item en ${sec.title}`,
+    submitLabel: "Crear",
+    initial: { name:"", name_en:"", desc:"", desc_en:"", price:"", order:1 },
+    fields: [
+      { name:"name", label:"Nombre (ES)" },
+      { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
+      { name:"desc", label:"Descripción (ES)", type:"textarea", rows:2, placeholder:"Opcional" },
+      { name:"desc_en", label:"Description (EN)", type:"textarea", rows:2, placeholder:"Opcional" },
+      { name:"price", label:"Precio", placeholder:"ej: 3.50" },
+      { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+    ]
+  });
+  if (!data) return;
 
   try{
     await addDoc(collection(db, "sections", sec.id, "items"), {
-      name,
-      ...(name_en ? { name_en } : {}),
-      desc: desc || undefined,
-      ...(desc_en ? { desc_en } : {}),
-      price,
-      order: isNaN(order) ? 9999 : order,
+      name: data.name,
+      ...(data.name_en ? { name_en: data.name_en } : {}),
+      desc: data.desc || undefined,
+      ...(data.desc_en ? { desc_en: data.desc_en } : {}),
+      price: data.price,
+      order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
       createdAt: serverTimestamp(), updatedAt: serverTimestamp()
     });
     await reload();
@@ -462,18 +621,36 @@ async function onAddItem(sec){
 }
 
 async function onEditItem(sec, it){
-  const name = prompt("Nombre (ES)", it.name || "");
-  if (!name) return;
-  const name_en = prompt("Name (EN) — opcional", it.name_en || "");
-  const desc = prompt("Descripción (ES) — opcional", it.desc || "");
-  const desc_en = prompt("Description (EN) — opcional", it.desc_en || "");
-  const price = prompt("Precio (ej: 3,50 €)", it.price || "");
-  const orderStr = prompt("Orden (número)", typeof it.order==="number" ? String(it.order) : "1");
-  const order = Number(orderStr);
+  const data = await openForm({
+    title: `Editar item: ${it.name}`,
+    submitLabel: "Guardar",
+    initial: {
+      name: it.name || "",
+      name_en: it.name_en || "",
+      desc: it.desc || "",
+      desc_en: it.desc_en || "",
+      price: it.price || "",
+      order: typeof it.order==="number" ? it.order : 1,
+    },
+    fields: [
+      { name:"name", label:"Nombre (ES)" },
+      { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
+      { name:"desc", label:"Descripción (ES)", type:"textarea", rows:2, placeholder:"Opcional" },
+      { name:"desc_en", label:"Description (EN)", type:"textarea", rows:2, placeholder:"Opcional" },
+      { name:"price", label:"Precio" },
+      { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+    ]
+  });
+  if (!data) return;
+
   try{
     await updateDoc(doc(db, "sections", sec.id, "items", it.id), {
-      name, name_en, desc, desc_en, price,
-      order: isNaN(order) ? 9999 : order,
+      name: data.name,
+      name_en: data.name_en || "",
+      desc: data.desc || "",
+      desc_en: data.desc_en || "",
+      price: data.price,
+      order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
       updatedAt: serverTimestamp()
     });
     await reload();
@@ -493,9 +670,14 @@ async function onDeleteItem(sec, it){
 }
 
 async function onChangeItemOrder(sec, it){
-  const nv = prompt("Nuevo orden (número):", typeof it.order==="number" ? String(it.order) : "1");
-  if (nv == null) return;
-  const order = Number(nv);
+  const data = await openForm({
+    title: `Orden de: ${it.name}`,
+    submitLabel: "Guardar",
+    initial: { order: typeof it.order==="number" ? it.order : 1 },
+    fields: [ { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" } ]
+  });
+  if (!data) return;
+  const order = Number(data.order);
   try{
     await updateDoc(doc(db, "sections", sec.id, "items", it.id), {
       order: isNaN(order) ? 9999 : order,
@@ -507,20 +689,27 @@ async function onChangeItemOrder(sec, it){
   }
 }
 
-/* ======= Actions: Toppings ======= */
+/* ======= Toppings ======= */
 async function onAddTopping(sec){
-  const name = prompt("Nombre del topping (ES)");
-  if (!name) return;
-  const name_en = prompt("Topping name (EN) — opcional", "");
-  const price = prompt("Precio (opcional)", "");
-  const orderStr = prompt("Orden (número, menor primero)", "1");
-  const order = Number(orderStr);
+  const data = await openForm({
+    title: `Nuevo topping en ${sec.title}`,
+    submitLabel: "Crear",
+    initial: { name:"", name_en:"", price:"", order:1 },
+    fields: [
+      { name:"name", label:"Nombre (ES)" },
+      { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
+      { name:"price", label:"Precio (opcional)", placeholder:"ej: 1.50" },
+      { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+    ]
+  });
+  if (!data) return;
+
   try{
     await addDoc(collection(db, "sections", sec.id, "toppings"), {
-      name,
-      ...(name_en ? { name_en } : {}),
-      price,
-      order: isNaN(order) ? 9999 : order,
+      name: data.name,
+      ...(data.name_en ? { name_en: data.name_en } : {}),
+      price: data.price || "",
+      order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
       createdAt: serverTimestamp(), updatedAt: serverTimestamp()
     });
     await reload();
@@ -530,16 +719,30 @@ async function onAddTopping(sec){
 }
 
 async function onEditTopping(sec, tp){
-  const name = prompt("Nombre (ES)", tp.name || "");
-  if (!name) return;
-  const name_en = prompt("Name (EN) — opcional", tp.name_en || "");
-  const price = prompt("Precio (opcional)", tp.price || "");
-  const orderStr = prompt("Orden (número)", typeof tp.order==="number" ? String(tp.order) : "1");
-  const order = Number(orderStr);
+  const data = await openForm({
+    title: `Editar topping: ${tp.name}`,
+    submitLabel: "Guardar",
+    initial: {
+      name: tp.name || "",
+      name_en: tp.name_en || "",
+      price: tp.price || "",
+      order: typeof tp.order==="number" ? tp.order : 1,
+    },
+    fields: [
+      { name:"name", label:"Nombre (ES)" },
+      { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
+      { name:"price", label:"Precio (opcional)" },
+      { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+    ]
+  });
+  if (!data) return;
+
   try{
     await updateDoc(doc(db, "sections", sec.id, "toppings", tp.id), {
-      name, name_en, price,
-      order: isNaN(order) ? 9999 : order,
+      name: data.name,
+      name_en: data.name_en || "",
+      price: data.price || "",
+      order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
       updatedAt: serverTimestamp()
     });
     await reload();
@@ -559,9 +762,14 @@ async function onDeleteTopping(sec, tp){
 }
 
 async function onChangeToppingOrder(sec, tp){
-  const nv = prompt("Nuevo orden (número):", typeof tp.order==="number" ? String(tp.order) : "1");
-  if (nv == null) return;
-  const order = Number(nv);
+  const data = await openForm({
+    title: `Orden de: ${tp.name}`,
+    submitLabel: "Guardar",
+    initial: { order: typeof tp.order==="number" ? tp.order : 1 },
+    fields: [ { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" } ]
+  });
+  if (!data) return;
+  const order = Number(data.order);
   try{
     await updateDoc(doc(db, "sections", sec.id, "toppings", tp.id), {
       order: isNaN(order) ? 9999 : order,
