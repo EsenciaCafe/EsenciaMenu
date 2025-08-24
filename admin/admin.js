@@ -1,10 +1,11 @@
 // admin/admin.js
-// Editor CRUD con formularios (sin prompt), soporte ES/EN, order, toppings,
-// y edición de nombres de categorías (settings/menu.nav_labels) con un formulario.
+// Editor CRUD con formularios, soporte ES/EN, order, toppings
+// y edición de nombres de categorías (settings/menu.nav_labels).
+// Limpia undefined en creates y usa deleteField() en edits.
 
 import { db } from "../firebase.js";
 import {
-  doc, setDoc, updateDoc, deleteDoc, getDoc,
+  doc, setDoc, updateDoc, deleteDoc, getDoc, deleteField,
   collection, getDocs, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -13,7 +14,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
 /* ======= Helpers UI ======= */
-const $ = (s, el=document)=> el.querySelector(s);
+const $  = (s, el=document)=> el.querySelector(s);
 const $$ = (s, el=document)=> [...el.querySelectorAll(s)];
 const slug = (s="") =>
   String(s).toLowerCase()
@@ -24,7 +25,6 @@ const slug = (s="") =>
 // openForm({title, fields, submitLabel, initial}) -> Promise<object|null>
 function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[] }){
   return new Promise(resolve=>{
-    // overlay
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     overlay.innerHTML = `
@@ -43,13 +43,13 @@ function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[]
     document.body.appendChild(overlay);
 
     const form = overlay.querySelector("#form-body");
-    // build fields
+
     fields.forEach(f=>{
       const row = document.createElement("div");
       row.className = "form-row";
       const id = `fld-${f.name}`;
-
       let control = "";
+
       if (f.type === "select"){
         control = `<select id="${id}" name="${f.name}">${(f.options||[]).map(o=>`
           <option value="${o.value}">${o.label}</option>`).join("")}</select>`;
@@ -71,7 +71,6 @@ function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[]
       `;
       form.appendChild(row);
 
-      // set initial
       const el = row.querySelector("#"+id);
       const val = initial[f.name];
       if (f.type === "checkbox"){
@@ -79,7 +78,7 @@ function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[]
       } else if (val!=null){
         el.value = String(val);
       }
-      // show/hide by dependsOn
+
       if (f.dependsOn){
         const dep = f.dependsOn;
         const depEl = overlay.querySelector(`[name="${dep.name}"]`);
@@ -93,8 +92,8 @@ function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[]
       }
     });
 
-    const close = ()=>{ overlay.remove(); };
-    overlay.querySelector("#form-close").onclick = ()=>{ close(); resolve(null); };
+    const close = ()=> overlay.remove();
+    overlay.querySelector("#form-close").onclick  = ()=>{ close(); resolve(null); };
     overlay.querySelector("#form-cancel").onclick = ()=>{ close(); resolve(null); };
     overlay.addEventListener("click", e=>{
       if (e.target === overlay){ close(); resolve(null); }
@@ -420,7 +419,7 @@ function sectionCard(sec){
   `;
 }
 
-/* ======= Formularios CRUD ======= */
+/* ======= Secciones ======= */
 async function onAddSection(){
   const data = await openForm({
     title: "Nueva sección",
@@ -451,26 +450,29 @@ async function onAddSection(){
   if (!data) return;
 
   const id = slug(data.title);
-  const base = data.base_enable ? {
-    ...(data.base_title ? { title: data.base_title } : {}),
-    ...(data.base_title_en ? { title_en: data.base_title_en } : {}),
-    ...(data.base_desc ? { description: data.base_desc } : {}),
-    ...(data.base_desc_en ? { description_en: data.base_desc_en } : {}),
-    ...(data.base_price ? { price: data.base_price } : {}),
-  } : null;
 
+  // Construimos payload limpio (sin undefined/strings vacías)
   const payload = {
     title: data.title,
-    ...(data.title_en ? { title_en: data.title_en } : {}),
-    subtitle: data.subtitle || undefined,
-    ...(data.subtitle_en ? { subtitle_en: data.subtitle_en } : {}),
-    note: data.note || undefined,
-    ...(data.note_en ? { note_en: data.note_en } : {}),
     group: data.group,
     order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
-    ...(base ? { base } : {}),
     createdAt: serverTimestamp(), updatedAt: serverTimestamp()
   };
+  if (data.title_en) payload.title_en = data.title_en;
+  if (data.subtitle) payload.subtitle = data.subtitle;
+  if (data.subtitle_en) payload.subtitle_en = data.subtitle_en;
+  if (data.note) payload.note = data.note;
+  if (data.note_en) payload.note_en = data.note_en;
+
+  if (data.base_enable) {
+    const base = {};
+    if (data.base_title) base.title = data.base_title;
+    if (data.base_title_en) base.title_en = data.base_title_en;
+    if (data.base_desc) base.description = data.base_desc;
+    if (data.base_desc_en) base.description_en = data.base_desc_en;
+    if (data.base_price) base.price = data.base_price;
+    if (Object.keys(base).length) payload.base = base;
+  }
 
   try{
     await setDoc(doc(db, "sections", id), payload, { merge: true });
@@ -524,27 +526,32 @@ async function onEditSection(sec){
   });
   if (!data) return;
 
-  const base = data.base_enable ? {
-    ...(data.base_title ? { title: data.base_title } : { title: "" }),
-    ...(data.base_title_en ? { title_en: data.base_title_en } : { title_en: "" }),
-    ...(data.base_desc ? { description: data.base_desc } : { description: "" }),
-    ...(data.base_desc_en ? { description_en: data.base_desc_en } : { description_en: "" }),
-    ...(data.base_price ? { price: data.base_price } : { price: "" }),
-  } : null;
+  const patch = {
+    title: data.title,
+    title_en: data.title_en ? data.title_en : deleteField(),
+    subtitle: data.subtitle ? data.subtitle : deleteField(),
+    subtitle_en: data.subtitle_en ? data.subtitle_en : deleteField(),
+    note: data.note ? data.note : deleteField(),
+    note_en: data.note_en ? data.note_en : deleteField(),
+    group: data.group,
+    order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+    updatedAt: serverTimestamp()
+  };
+
+  if (data.base_enable){
+    const base = {};
+    base.title = data.base_title ? data.base_title : deleteField();
+    base.title_en = data.base_title_en ? data.base_title_en : deleteField();
+    base.description = data.base_desc ? data.base_desc : deleteField();
+    base.description_en = data.base_desc_en ? data.base_desc_en : deleteField();
+    base.price = data.base_price ? data.base_price : deleteField();
+    patch.base = base;
+  } else {
+    patch.base = deleteField();
+  }
 
   try{
-    await updateDoc(doc(db, "sections", sec.id), {
-      title: data.title,
-      title_en: data.title_en || "",
-      subtitle: data.subtitle || "",
-      subtitle_en: data.subtitle_en || "",
-      note: data.note || "",
-      note_en: data.note_en || "",
-      group: data.group,
-      order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
-      ...(data.base_enable ? { base } : { base: null }),
-      updatedAt: serverTimestamp()
-    });
+    await updateDoc(doc(db, "sections", sec.id), patch);
     await reload();
   }catch(e){
     console.error(e); alert("No se pudo editar la sección.");
@@ -604,16 +611,19 @@ async function onAddItem(sec){
   });
   if (!data) return;
 
+  const payload = {
+    name: data.name,
+    order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  if (data.name_en) payload.name_en = data.name_en;
+  if (data.desc) payload.desc = data.desc;
+  if (data.desc_en) payload.desc_en = data.desc_en;
+  if (data.price) payload.price = data.price;
+
   try{
-    await addDoc(collection(db, "sections", sec.id, "items"), {
-      name: data.name,
-      ...(data.name_en ? { name_en: data.name_en } : {}),
-      desc: data.desc || undefined,
-      ...(data.desc_en ? { desc_en: data.desc_en } : {}),
-      price: data.price,
-      order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    });
+    await addDoc(collection(db, "sections", sec.id, "items"), payload);
     await reload();
   }catch(e){
     console.error(e); alert("No se pudo añadir el item.");
@@ -643,16 +653,18 @@ async function onEditItem(sec, it){
   });
   if (!data) return;
 
+  const patch = {
+    name: data.name,
+    order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+    updatedAt: serverTimestamp(),
+  };
+  patch.name_en = data.name_en ? data.name_en : deleteField();
+  patch.desc    = data.desc    ? data.desc    : deleteField();
+  patch.desc_en = data.desc_en ? data.desc_en : deleteField();
+  patch.price   = data.price   ? data.price   : deleteField();
+
   try{
-    await updateDoc(doc(db, "sections", sec.id, "items", it.id), {
-      name: data.name,
-      name_en: data.name_en || "",
-      desc: data.desc || "",
-      desc_en: data.desc_en || "",
-      price: data.price,
-      order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
-      updatedAt: serverTimestamp()
-    });
+    await updateDoc(doc(db, "sections", sec.id, "items", it.id), patch);
     await reload();
   }catch(e){
     console.error(e); alert("No se pudo editar el item.");
@@ -704,14 +716,17 @@ async function onAddTopping(sec){
   });
   if (!data) return;
 
+  const payload = {
+    name: data.name,
+    order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  if (data.name_en) payload.name_en = data.name_en;
+  if (data.price) payload.price = data.price;
+
   try{
-    await addDoc(collection(db, "sections", sec.id, "toppings"), {
-      name: data.name,
-      ...(data.name_en ? { name_en: data.name_en } : {}),
-      price: data.price || "",
-      order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    });
+    await addDoc(collection(db, "sections", sec.id, "toppings"), payload);
     await reload();
   }catch(e){
     console.error(e); alert("No se pudo añadir el topping.");
@@ -737,14 +752,16 @@ async function onEditTopping(sec, tp){
   });
   if (!data) return;
 
+  const patch = {
+    name: data.name,
+    order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+    updatedAt: serverTimestamp(),
+  };
+  patch.name_en = data.name_en ? data.name_en : deleteField();
+  patch.price   = data.price   ? data.price   : deleteField();
+
   try{
-    await updateDoc(doc(db, "sections", sec.id, "toppings", tp.id), {
-      name: data.name,
-      name_en: data.name_en || "",
-      price: data.price || "",
-      order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
-      updatedAt: serverTimestamp()
-    });
+    await updateDoc(doc(db, "sections", sec.id, "toppings", tp.id), patch);
     await reload();
   }catch(e){
     console.error(e); alert("No se pudo editar el topping.");
