@@ -1,14 +1,14 @@
 // admin/admin.js
-// Editor CRUD con formularios, soporte ES/EN, order, toppings
-// y edición de nombres de categorías (settings/menu.nav_labels).
-// Limpia undefined en creates y usa deleteField() en edits.
+// Editor CRUD con formularios, soporte ES/EN, order, toppings,
+// renombrado de categorías (settings/menu.nav_labels),
+// ocultar/mostrar (hidden) secciones, items y toppings,
+// sin undefined en creates y con deleteField() en edits.
 
 import { db } from "../firebase.js";
 import {
   doc, setDoc, updateDoc, deleteDoc, getDoc, deleteField,
   collection, getDocs, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
@@ -22,7 +22,6 @@ const slug = (s="") =>
     .replace(/[^\w]+/g,'-').replace(/(^-|-$)/g,'');
 
 /* ======= Modal/Form genérico ======= */
-// openForm({title, fields, submitLabel, initial}) -> Promise<object|null>
 function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[] }){
   return new Promise(resolve=>{
     const overlay = document.createElement("div");
@@ -41,7 +40,6 @@ function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[]
       </div>
     `;
     document.body.appendChild(overlay);
-
     const form = overlay.querySelector("#form-body");
 
     fields.forEach(f=>{
@@ -49,21 +47,16 @@ function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[]
       row.className = "form-row";
       const id = `fld-${f.name}`;
       let control = "";
-
       if (f.type === "select"){
         control = `<select id="${id}" name="${f.name}">${(f.options||[]).map(o=>`
           <option value="${o.value}">${o.label}</option>`).join("")}</select>`;
       } else if (f.type === "textarea"){
         control = `<textarea id="${id}" name="${f.name}" rows="${f.rows||3}" placeholder="${f.placeholder||""}"></textarea>`;
       } else if (f.type === "checkbox"){
-        control = `<label class="chk">
-          <input type="checkbox" id="${id}" name="${f.name}">
-          <span>${f.help||""}</span>
-        </label>`;
+        control = `<label class="chk"><input type="checkbox" id="${id}" name="${f.name}"><span>${f.help||""}</span></label>`;
       } else {
         control = `<input id="${id}" name="${f.name}" type="${f.type||"text"}" placeholder="${f.placeholder||""}">`;
       }
-
       row.innerHTML = `
         ${f.type==="checkbox" ? "" : `<label for="${id}">${f.label||f.name}</label>`}
         ${control}
@@ -73,11 +66,8 @@ function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[]
 
       const el = row.querySelector("#"+id);
       const val = initial[f.name];
-      if (f.type === "checkbox"){
-        el.checked = !!val;
-      } else if (val!=null){
-        el.value = String(val);
-      }
+      if (f.type === "checkbox"){ el.checked = !!val; }
+      else if (val!=null){ el.value = String(val); }
 
       if (f.dependsOn){
         const dep = f.dependsOn;
@@ -95,9 +85,7 @@ function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[]
     const close = ()=> overlay.remove();
     overlay.querySelector("#form-close").onclick  = ()=>{ close(); resolve(null); };
     overlay.querySelector("#form-cancel").onclick = ()=>{ close(); resolve(null); };
-    overlay.addEventListener("click", e=>{
-      if (e.target === overlay){ close(); resolve(null); }
-    });
+    overlay.addEventListener("click", e=>{ if (e.target === overlay){ close(); resolve(null); } });
 
     overlay.querySelector("#form-submit").onclick = (e)=>{
       e.preventDefault();
@@ -105,20 +93,16 @@ function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[]
       fields.forEach(f=>{
         const el = overlay.querySelector(`[name="${f.name}"]`);
         if (!el) return;
-        if (f.type==="checkbox"){
-          data[f.name] = !!el.checked;
-        } else {
+        if (f.type==="checkbox"){ data[f.name] = !!el.checked; }
+        else {
           const v = el.value.trim();
           if (f.type==="number"){
             const num = Number(v);
             data[f.name] = isNaN(num) ? (v===""? "" : v) : num;
-          } else {
-            data[f.name] = v;
-          }
+          } else { data[f.name] = v; }
         }
       });
-      resolve(data);
-      close();
+      resolve(data); close();
     };
   });
 }
@@ -142,22 +126,14 @@ const groupToId = (g) => {
 
 /* ======= Auth ======= */
 const auth = getAuth();
-
 $("#btn-login")?.addEventListener("click", async ()=>{
   const email = $("#email").value.trim();
   const password = $("#password").value;
   if (!email || !password) { alert("Completa email y contraseña"); return; }
-  try{
-    await signInWithEmailAndPassword(auth, email, password);
-  }catch(err){
-    console.error(err);
-    alert("No se pudo iniciar sesión: " + (err.message || err));
-  }
+  try{ await signInWithEmailAndPassword(auth, email, password); }
+  catch(err){ console.error(err); alert("No se pudo iniciar sesión: " + (err.message || err)); }
 });
-
-$("#btn-logout")?.addEventListener("click", async ()=>{
-  await signOut(auth);
-});
+$("#btn-logout")?.addEventListener("click", async ()=>{ await signOut(auth); });
 
 onAuthStateChanged(auth, (user)=>{
   if (user){
@@ -173,11 +149,7 @@ onAuthStateChanged(auth, (user)=>{
 });
 
 /* ======= Estado ======= */
-let STATE = {
-  sections: [],
-  byGroup: {},
-  activeTab: "poffertjes",
-};
+let STATE = { sections: [], byGroup: {}, activeTab: "poffertjes" };
 
 function groupSections(sections){
   const map = {};
@@ -225,7 +197,6 @@ function buildNav(){
     });
   });
 
-  // Barra de acciones del admin
   let actions = document.getElementById("admin-actions");
   if (!actions){
     actions = document.createElement("div");
@@ -237,7 +208,6 @@ function buildNav(){
     <button class="btn accent" id="btn-add-section">+ Sección</button>
     <button class="btn" id="btn-edit-cats">Editar nombres de categorías</button>
   `;
-
   $("#btn-add-section").onclick = onAddSection;
   $("#btn-edit-cats").onclick = onEditCategoryNames;
 }
@@ -248,7 +218,6 @@ async function onEditCategoryNames(){
     const ref = doc(collection(db, "settings"), "menu");
     const snap = await getDoc(ref);
     const current = snap.exists() ? (snap.data().nav_labels || {}) : {};
-
     const initial = {
       poff_es: current.poffertjes?.es ?? "Poffertjes",
       poff_en: current.poffertjes?.en ?? "Mini Pancakes",
@@ -259,7 +228,6 @@ async function onEditCategoryNames(){
       beb_es:  current.bebidas?.es ?? "Bebidas",
       beb_en:  current.bebidas?.en ?? "Drinks",
     };
-
     const data = await openForm({
       title: "Editar nombres de categorías",
       submitLabel: "Guardar",
@@ -276,21 +244,15 @@ async function onEditCategoryNames(){
       ]
     });
     if (!data) return;
-
     const nav_labels = {
       poffertjes: { es: data.poff_es.trim(), en: data.poff_en.trim() },
       cafe:       { es: data.cafe_es.trim(), en: data.cafe_en.trim() },
       desayunos:  { es: data.des_es.trim(),  en: data.des_en.trim() },
       bebidas:    { es: data.beb_es.trim(),  en: data.beb_en.trim() },
     };
-
     await setDoc(ref, { nav_labels }, { merge: true });
-    alert("Nombres de categorías actualizados.");
-    await reload();
-  }catch(e){
-    console.error(e);
-    alert("No se pudieron actualizar las categorías.");
-  }
+    alert("Nombres de categorías actualizados."); await reload();
+  }catch(e){ console.error(e); alert("No se pudieron actualizar las categorías."); }
 }
 
 /* ======= Render ======= */
@@ -307,11 +269,10 @@ function render(){
     return (a.title||"").localeCompare(b.title||"", "es");
   });
 
-  wrap.innerHTML = sections.map(sec => sectionCard(sec)).join("") || `
-    <div class="note">No hay secciones en esta categoría.</div>
-  `;
+  wrap.innerHTML = sections.map(sec => sectionCard(sec)).join("") || `<div class="note">No hay secciones en esta categoría.</div>`;
 
   sections.forEach(sec=>{
+    $("#toggle-sec-"+sec.id)?.addEventListener("click", ()=> onToggleSectionHidden(sec));
     $("#edit-sec-"+sec.id)?.addEventListener("click", ()=> onEditSection(sec));
     $("#del-sec-"+sec.id)?.addEventListener("click", ()=> onDeleteSection(sec));
     $("#order-sec-"+sec.id)?.addEventListener("click", ()=> onChangeSectionOrder(sec));
@@ -319,11 +280,13 @@ function render(){
     $("#add-top-"+sec.id)?.addEventListener("click", ()=> onAddTopping(sec));
 
     (sec.items||[]).forEach(it=>{
+      $("#toggle-item-"+sec.id+"-"+it.id)?.addEventListener("click", ()=> onToggleItemHidden(sec, it));
       $("#edit-item-"+sec.id+"-"+it.id)?.addEventListener("click", ()=> onEditItem(sec, it));
       $("#order-item-"+sec.id+"-"+it.id)?.addEventListener("click", ()=> onChangeItemOrder(sec, it));
       $("#del-item-"+sec.id+"-"+it.id)?.addEventListener("click", ()=> onDeleteItem(sec, it));
     });
     (sec.toppings||[]).forEach(tp=>{
+      $("#toggle-top-"+sec.id+"-"+tp.id)?.addEventListener("click", (e)=>{ e.preventDefault(); onToggleToppingHidden(sec, tp); });
       $("#edit-top-"+sec.id+"-"+tp.id)?.addEventListener("click", ()=> onEditTopping(sec, tp));
       $("#order-top-"+sec.id+"-"+tp.id)?.addEventListener("click", ()=> onChangeToppingOrder(sec, tp));
       $("#del-top-"+sec.id+"-"+tp.id)?.addEventListener("click", ()=> onDeleteTopping(sec, tp));
@@ -350,10 +313,13 @@ function sectionCard(sec){
 
   return `
     <div class="section" id="${slug(sec.title||sec.id)}">
-      <div class="card">
+      <div class="card ${sec.hidden ? 'muted-out' : ''}">
         <div class="title">
           <span>${sec.title || ""}</span>
-          <span class="right">order: ${typeof sec.order==="number" ? sec.order : "-"}</span>
+          <span class="right">
+            ${sec.hidden ? `<span class="badge-soft">OCULTA</span>` : ""}
+            order: ${typeof sec.order==="number" ? sec.order : "-"}
+          </span>
         </div>
         ${sec.subtitle ? `<div class="muted">${sec.subtitle}</div>` : ""}
         ${sec.note ? `<div class="note" style="margin:10px 0">${sec.note}</div>` : ""}
@@ -367,6 +333,7 @@ function sectionCard(sec){
         }
 
         <div class="row-actions" style="margin-top:10px">
+          <button class="btn" id="toggle-sec-${sec.id}">${sec.hidden ? "👁 Mostrar" : "🚫 Ocultar"}</button>
           <button class="btn accent" id="edit-sec-${sec.id}">✏ Editar sección</button>
           <button class="btn" id="order-sec-${sec.id}">↕ Orden</button>
           <button class="btn danger" id="del-sec-${sec.id}">🗑 Eliminar</button>
@@ -376,14 +343,15 @@ function sectionCard(sec){
         ${itemsSorted.length ? `
           <div class="grid">
             ${itemsSorted.map(it=>`
-              <div class="card">
+              <div class="card ${it.hidden?'muted-out':''}">
                 <div class="title">
-                  <span>${it.name||""}</span>
+                  <span>${it.name||""} ${it.hidden?'<span class="badge-soft">OCULTO</span>':''}</span>
                   <span class="right">${it.price||""}</span>
                 </div>
                 ${it.desc? `<div class="muted">${it.desc}</div>`:""}
                 ${ (it.name_en || it.desc_en) ? `<div class="muted-small">EN: ${it.name_en||""} ${it.desc_en?`— ${it.desc_en}`:""}</div>`:"" }
                 <div class="row-actions" style="margin-top:8px">
+                  <button class="btn" id="toggle-item-${sec.id}-${it.id}">${it.hidden ? "👁 Mostrar" : "🚫 Ocultar"}</button>
                   <button class="btn" id="edit-item-${sec.id}-${it.id}">✏ Editar</button>
                   <button class="btn" id="order-item-${sec.id}-${it.id}">↕ Orden</button>
                   <button class="btn danger" id="del-item-${sec.id}-${it.id}">🗑 Eliminar</button>
@@ -402,10 +370,11 @@ function sectionCard(sec){
         ${toppingsSorted.length ? `
           <div class="toppings">
             ${toppingsSorted.map(tp=>`
-              <span class="badge">
+              <span class="badge ${tp.hidden?'muted-out':''}">
                 ${tp.name}${tp.price?` — ${tp.price}`:""}
                 ${ tp.name_en ? `<span class="muted-small" style="margin-left:6px">EN: ${tp.name_en}</span>` : "" }
                 <span style="margin-left:6px">
+                  <a href="#" id="toggle-top-${sec.id}-${tp.id}" title="${tp.hidden?'Mostrar':'Ocultar'}">${tp.hidden?'👁':'🚫'}</a>
                   <a href="#" id="edit-top-${sec.id}-${tp.id}" title="Editar">✏</a>
                   <a href="#" id="order-top-${sec.id}-${tp.id}" title="Orden">↕</a>
                   <a href="#" id="del-top-${sec.id}-${tp.id}" title="Eliminar" style="color:#b91c1c">🗑</a>
@@ -419,12 +388,32 @@ function sectionCard(sec){
   `;
 }
 
+/* ======= Toggle hidden ======= */
+async function onToggleSectionHidden(sec){
+  try{
+    await updateDoc(doc(db, "sections", sec.id), { hidden: !sec.hidden, updatedAt: serverTimestamp() });
+    await reload();
+  }catch(e){ console.error(e); alert("No se pudo cambiar la visibilidad de la sección."); }
+}
+async function onToggleItemHidden(sec, it){
+  try{
+    await updateDoc(doc(db, "sections", sec.id, "items", it.id), { hidden: !it.hidden, updatedAt: serverTimestamp() });
+    await reload();
+  }catch(e){ console.error(e); alert("No se pudo cambiar la visibilidad del item."); }
+}
+async function onToggleToppingHidden(sec, tp){
+  try{
+    await updateDoc(doc(db, "sections", sec.id, "toppings", tp.id), { hidden: !tp.hidden, updatedAt: serverTimestamp() });
+    await reload();
+  }catch(e){ console.error(e); alert("No se pudo cambiar la visibilidad del topping."); }
+}
+
 /* ======= Secciones ======= */
 async function onAddSection(){
   const data = await openForm({
     title: "Nueva sección",
     submitLabel: "Crear",
-    initial: { group:"Desayunos", title:"", title_en:"", subtitle:"", subtitle_en:"", note:"", note_en:"", order:1, base_enable:false, base_title:"", base_title_en:"", base_desc:"", base_desc_en:"", base_price:"" },
+    initial: { group:"Desayunos", title:"", title_en:"", subtitle:"", subtitle_en:"", note:"", note_en:"", order:1, hidden:false, base_enable:false, base_title:"", base_title_en:"", base_desc:"", base_desc_en:"", base_price:"" },
     fields: [
       { name:"group", label:"Grupo", type:"select", options:[
         {value:"Poffertjes", label:"Poffertjes"},
@@ -439,6 +428,7 @@ async function onAddSection(){
       { name:"note", label:"Nota (ES)", placeholder:"Opcional" },
       { name:"note_en", label:"Note (EN)", placeholder:"Opcional" },
       { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+      { name:"hidden", type:"checkbox", help:"Ocultar esta sección" },
       { name:"base_enable", type:"checkbox", help:"Añadir BASE (título/desc/precio)" },
       { name:"base_title", label:"Base · Título (ES)", dependsOn:{name:"base_enable", when:v=>!!v} },
       { name:"base_title_en", label:"Base · Title (EN)", placeholder:"Opcional", dependsOn:{name:"base_enable", when:v=>!!v} },
@@ -450,12 +440,11 @@ async function onAddSection(){
   if (!data) return;
 
   const id = slug(data.title);
-
-  // Construimos payload limpio (sin undefined/strings vacías)
   const payload = {
     title: data.title,
     group: data.group,
     order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+    hidden: !!data.hidden,
     createdAt: serverTimestamp(), updatedAt: serverTimestamp()
   };
   if (data.title_en) payload.title_en = data.title_en;
@@ -474,12 +463,8 @@ async function onAddSection(){
     if (Object.keys(base).length) payload.base = base;
   }
 
-  try{
-    await setDoc(doc(db, "sections", id), payload, { merge: true });
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo crear sección.");
-  }
+  try{ await setDoc(doc(db, "sections", id), payload, { merge: true }); await reload(); }
+  catch(e){ console.error(e); alert("No se pudo crear sección."); }
 }
 
 async function onEditSection(sec){
@@ -495,6 +480,7 @@ async function onEditSection(sec){
       note: sec.note || "",
       note_en: sec.note_en || "",
       order: typeof sec.order==="number"? sec.order : 1,
+      hidden: !!sec.hidden,
       base_enable: !!sec.base,
       base_title: sec.base?.title || "",
       base_title_en: sec.base?.title_en || "",
@@ -516,6 +502,7 @@ async function onEditSection(sec){
       { name:"note", label:"Nota (ES)", placeholder:"Opcional" },
       { name:"note_en", label:"Note (EN)", placeholder:"Opcional" },
       { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+      { name:"hidden", type:"checkbox", help:"Ocultar esta sección" },
       { name:"base_enable", type:"checkbox", help:"Editar BASE (título/desc/precio)" },
       { name:"base_title", label:"Base · Título (ES)", dependsOn:{name:"base_enable", when:v=>!!v} },
       { name:"base_title_en", label:"Base · Title (EN)", placeholder:"Opcional", dependsOn:{name:"base_enable", when:v=>!!v} },
@@ -535,6 +522,7 @@ async function onEditSection(sec){
     note_en: data.note_en ? data.note_en : deleteField(),
     group: data.group,
     order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+    hidden: !!data.hidden,
     updatedAt: serverTimestamp()
   };
 
@@ -550,28 +538,17 @@ async function onEditSection(sec){
     patch.base = deleteField();
   }
 
-  try{
-    await updateDoc(doc(db, "sections", sec.id), patch);
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo editar la sección.");
-  }
+  try{ await updateDoc(doc(db, "sections", sec.id), patch); await reload(); }
+  catch(e){ console.error(e); alert("No se pudo editar la sección."); }
 }
 
 async function onDeleteSection(sec){
   if (!confirm(`Eliminar sección "${sec.title}" y TODO su contenido (items/toppings)?`)) return;
   try{
-    for (const it of (sec.items||[])){
-      await deleteDoc(doc(db, "sections", sec.id, "items", it.id));
-    }
-    for (const tp of (sec.toppings||[])){
-      await deleteDoc(doc(db, "sections", sec.id, "toppings", tp.id));
-    }
-    await deleteDoc(doc(db, "sections", sec.id));
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo eliminar la sección.");
-  }
+    for (const it of (sec.items||[])){ await deleteDoc(doc(db, "sections", sec.id, "items", it.id)); }
+    for (const tp of (sec.toppings||[])){ await deleteDoc(doc(db, "sections", sec.id, "toppings", tp.id)); }
+    await deleteDoc(doc(db, "sections", sec.id)); await reload();
+  }catch(e){ console.error(e); alert("No se pudo eliminar la sección."); }
 }
 
 async function onChangeSectionOrder(sec){
@@ -583,15 +560,8 @@ async function onChangeSectionOrder(sec){
   });
   if (!data) return;
   const order = Number(data.order);
-  try{
-    await updateDoc(doc(db, "sections", sec.id), {
-      order: isNaN(order)? 9999 : order,
-      updatedAt: serverTimestamp()
-    });
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo actualizar el orden.");
-  }
+  try{ await updateDoc(doc(db, "sections", sec.id), { order: isNaN(order)? 9999 : order, updatedAt: serverTimestamp() }); await reload(); }
+  catch(e){ console.error(e); alert("No se pudo actualizar el orden."); }
 }
 
 /* ======= Items ======= */
@@ -599,7 +569,7 @@ async function onAddItem(sec){
   const data = await openForm({
     title: `Nuevo item en ${sec.title}`,
     submitLabel: "Crear",
-    initial: { name:"", name_en:"", desc:"", desc_en:"", price:"", order:1 },
+    initial: { name:"", name_en:"", desc:"", desc_en:"", price:"", order:1, hidden:false },
     fields: [
       { name:"name", label:"Nombre (ES)" },
       { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
@@ -607,6 +577,7 @@ async function onAddItem(sec){
       { name:"desc_en", label:"Description (EN)", type:"textarea", rows:2, placeholder:"Opcional" },
       { name:"price", label:"Precio", placeholder:"ej: 3.50" },
       { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+      { name:"hidden", type:"checkbox", help:"Ocultar este item" },
     ]
   });
   if (!data) return;
@@ -614,20 +585,16 @@ async function onAddItem(sec){
   const payload = {
     name: data.name,
     order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    hidden: !!data.hidden,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
   };
   if (data.name_en) payload.name_en = data.name_en;
   if (data.desc) payload.desc = data.desc;
   if (data.desc_en) payload.desc_en = data.desc_en;
   if (data.price) payload.price = data.price;
 
-  try{
-    await addDoc(collection(db, "sections", sec.id, "items"), payload);
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo añadir el item.");
-  }
+  try{ await addDoc(collection(db, "sections", sec.id, "items"), payload); await reload(); }
+  catch(e){ console.error(e); alert("No se pudo añadir el item."); }
 }
 
 async function onEditItem(sec, it){
@@ -641,6 +608,7 @@ async function onEditItem(sec, it){
       desc_en: it.desc_en || "",
       price: it.price || "",
       order: typeof it.order==="number" ? it.order : 1,
+      hidden: !!it.hidden,
     },
     fields: [
       { name:"name", label:"Nombre (ES)" },
@@ -649,6 +617,7 @@ async function onEditItem(sec, it){
       { name:"desc_en", label:"Description (EN)", type:"textarea", rows:2, placeholder:"Opcional" },
       { name:"price", label:"Precio" },
       { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+      { name:"hidden", type:"checkbox", help:"Ocultar este item" },
     ]
   });
   if (!data) return;
@@ -656,6 +625,7 @@ async function onEditItem(sec, it){
   const patch = {
     name: data.name,
     order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+    hidden: !!data.hidden,
     updatedAt: serverTimestamp(),
   };
   patch.name_en = data.name_en ? data.name_en : deleteField();
@@ -663,22 +633,14 @@ async function onEditItem(sec, it){
   patch.desc_en = data.desc_en ? data.desc_en : deleteField();
   patch.price   = data.price   ? data.price   : deleteField();
 
-  try{
-    await updateDoc(doc(db, "sections", sec.id, "items", it.id), patch);
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo editar el item.");
-  }
+  try{ await updateDoc(doc(db, "sections", sec.id, "items", it.id), patch); await reload(); }
+  catch(e){ console.error(e); alert("No se pudo editar el item."); }
 }
 
 async function onDeleteItem(sec, it){
   if (!confirm(`Eliminar item "${it.name}"?`)) return;
-  try{
-    await deleteDoc(doc(db, "sections", sec.id, "items", it.id));
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo eliminar el item.");
-  }
+  try{ await deleteDoc(doc(db, "sections", sec.id, "items", it.id)); await reload(); }
+  catch(e){ console.error(e); alert("No se pudo eliminar el item."); }
 }
 
 async function onChangeItemOrder(sec, it){
@@ -690,15 +652,8 @@ async function onChangeItemOrder(sec, it){
   });
   if (!data) return;
   const order = Number(data.order);
-  try{
-    await updateDoc(doc(db, "sections", sec.id, "items", it.id), {
-      order: isNaN(order) ? 9999 : order,
-      updatedAt: serverTimestamp()
-    });
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo actualizar el orden del item.");
-  }
+  try{ await updateDoc(doc(db, "sections", sec.id, "items", it.id), { order: isNaN(order) ? 9999 : order, updatedAt: serverTimestamp() }); await reload(); }
+  catch(e){ console.error(e); alert("No se pudo actualizar el orden del item."); }
 }
 
 /* ======= Toppings ======= */
@@ -706,12 +661,13 @@ async function onAddTopping(sec){
   const data = await openForm({
     title: `Nuevo topping en ${sec.title}`,
     submitLabel: "Crear",
-    initial: { name:"", name_en:"", price:"", order:1 },
+    initial: { name:"", name_en:"", price:"", order:1, hidden:false },
     fields: [
       { name:"name", label:"Nombre (ES)" },
       { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
       { name:"price", label:"Precio (opcional)", placeholder:"ej: 1.50" },
       { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+      { name:"hidden", type:"checkbox", help:"Ocultar este topping" },
     ]
   });
   if (!data) return;
@@ -719,35 +675,27 @@ async function onAddTopping(sec){
   const payload = {
     name: data.name,
     order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    hidden: !!data.hidden,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
   };
   if (data.name_en) payload.name_en = data.name_en;
   if (data.price) payload.price = data.price;
 
-  try{
-    await addDoc(collection(db, "sections", sec.id, "toppings"), payload);
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo añadir el topping.");
-  }
+  try{ await addDoc(collection(db, "sections", sec.id, "toppings"), payload); await reload(); }
+  catch(e){ console.error(e); alert("No se pudo añadir el topping."); }
 }
 
 async function onEditTopping(sec, tp){
   const data = await openForm({
     title: `Editar topping: ${tp.name}`,
     submitLabel: "Guardar",
-    initial: {
-      name: tp.name || "",
-      name_en: tp.name_en || "",
-      price: tp.price || "",
-      order: typeof tp.order==="number" ? tp.order : 1,
-    },
+    initial: { name: tp.name || "", name_en: tp.name_en || "", price: tp.price || "", order: typeof tp.order==="number" ? tp.order : 1, hidden: !!tp.hidden },
     fields: [
       { name:"name", label:"Nombre (ES)" },
       { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
       { name:"price", label:"Precio (opcional)" },
       { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
+      { name:"hidden", type:"checkbox", help:"Ocultar este topping" },
     ]
   });
   if (!data) return;
@@ -755,27 +703,20 @@ async function onEditTopping(sec, tp){
   const patch = {
     name: data.name,
     order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+    hidden: !!data.hidden,
     updatedAt: serverTimestamp(),
   };
   patch.name_en = data.name_en ? data.name_en : deleteField();
   patch.price   = data.price   ? data.price   : deleteField();
 
-  try{
-    await updateDoc(doc(db, "sections", sec.id, "toppings", tp.id), patch);
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo editar el topping.");
-  }
+  try{ await updateDoc(doc(db, "sections", sec.id, "toppings", tp.id), patch); await reload(); }
+  catch(e){ console.error(e); alert("No se pudo editar el topping."); }
 }
 
 async function onDeleteTopping(sec, tp){
   if (!confirm(`Eliminar topping "${tp.name}"?`)) return;
-  try{
-    await deleteDoc(doc(db, "sections", sec.id, "toppings", tp.id));
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo eliminar el topping.");
-  }
+  try{ await deleteDoc(doc(db, "sections", sec.id, "toppings", tp.id)); await reload(); }
+  catch(e){ console.error(e); alert("No se pudo eliminar el topping."); }
 }
 
 async function onChangeToppingOrder(sec, tp){
@@ -787,22 +728,12 @@ async function onChangeToppingOrder(sec, tp){
   });
   if (!data) return;
   const order = Number(data.order);
-  try{
-    await updateDoc(doc(db, "sections", sec.id, "toppings", tp.id), {
-      order: isNaN(order) ? 9999 : order,
-      updatedAt: serverTimestamp()
-    });
-    await reload();
-  }catch(e){
-    console.error(e); alert("No se pudo actualizar el orden del topping.");
-  }
+  try{ await updateDoc(doc(db, "sections", sec.id, "toppings", tp.id), { order: isNaN(order) ? 9999 : order, updatedAt: serverTimestamp() }); await reload(); }
+  catch(e){ console.error(e); alert("No se pudo actualizar el orden del topping."); }
 }
 
 /* ======= Init & Reload ======= */
-async function initEditor(){
-  buildNav();
-  await reload();
-}
+async function initEditor(){ buildNav(); await reload(); }
 
 async function reload(){
   const app = $("#sections");
