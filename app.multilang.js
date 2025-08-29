@@ -1,5 +1,6 @@
 // app.multilang.js
-// Carta en ES/EN. Lee window.LOCALE y soporta etiquetas de categorías desde settings/menu.nav_labels
+// Carta en ES/EN con soporte de etiquetas de categorías desde settings/menu.nav_labels
+// y filtrado de elementos ocultos (hidden: true).
 
 import { db } from "./firebase.js";
 import {
@@ -62,7 +63,7 @@ const groupToId = (g) => {
 /* ========= App state ========= */
 let STATE = { meta:{}, sections:[], byGroup:{} };
 
-/* === Utilidad: etiqueta de categoría desde settings/menu.nav_labels === */
+/* === Etiqueta de categoría desde settings/menu.nav_labels === */
 function getGroupLabel(id){
   const map = STATE.meta?.nav_labels || {};
   const i18n = map[id];
@@ -84,24 +85,37 @@ async function loadData(){
 
   const secsSnap = await getDocs(collection(db, "sections"));
 
-  const sections = await Promise.all(
+  // Construir y filtrar ocultos
+  const sections = (await Promise.all(
     secsSnap.docs.map(async (secDoc) => {
       const base = secDoc.data();
       const sid  = secDoc.id;
+
+      // Si la sección está oculta, igual cargamos subcolecciones para consistencia,
+      // pero luego filtramos abajo (o podríamos cortar aquí con null).
       const [itemsSnap, toppingsSnap] = await Promise.all([
         getDocs(collection(db, "sections", sid, "items")).catch(()=>({docs:[]})),
         getDocs(collection(db, "sections", sid, "toppings")).catch(()=>({docs:[]})),
       ]);
-      const items    = itemsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const toppings = toppingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Filtrar items/toppings ocultos
+      const items    = itemsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => !x.hidden);
+      const toppings = toppingsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => !x.hidden);
+
       return { id: sid, ...base, ...(items.length?{items}:{}) , ...(toppings.length?{toppings}:{}) };
     })
-  );
+  ))
+  // Filtrar secciones ocultas
+  .filter(s => !s.hidden);
 
+  // Orden por grupo y título
   sections.sort((a,b)=>{
     const ga = GROUPS.findIndex(g => g.id === groupToId(a.group || a.title || a.id));
     const gb = GROUPS.findIndex(g => g.id === groupToId(b.group || b.title || b.id));
     if (ga !== gb) return ga - gb;
+    const ao = (typeof a.order === "number") ? a.order : 9999;
+    const bo = (typeof b.order === "number") ? b.order : 9999;
+    if (ao !== bo) return ao - bo;
     return (a.title||"").localeCompare(b.title||"", "es");
   });
 
@@ -198,8 +212,8 @@ function renderItemsList(items = []){
 function renderSection(sec){
   const subtitle = pick(sec.subtitle, sec.subtitle_en);
   const note     = pick(sec.note, sec.note_en);
-  const isPoff = groupToId(sec.group || sec.title || sec.id) === "poffertjes";
-  const title = pick(sec.title, sec.title_en) || sec.title || "";
+  const isPoff   = groupToId(sec.group || sec.title || sec.id) === "poffertjes";
+  const title    = pick(sec.title, sec.title_en) || sec.title || "";
 
   return `
     <section class="section" id="${slug(title || sec.id)}">
