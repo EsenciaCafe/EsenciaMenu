@@ -80,7 +80,7 @@ async function loadData(){
   let meta = {};
   try {
     const metaSnap = await getDoc(doc(collection(db, "settings"), "menu"));
-    if (metaSnap.exists()) meta = metaSnap.data(); // aquí puede venir nav_labels
+    if (metaSnap.exists()) meta = metaSnap.data(); // aquí puede venir nav_labels + promo
   } catch {}
 
   const secsSnap = await getDocs(collection(db, "sections"));
@@ -91,8 +91,6 @@ async function loadData(){
       const base = secDoc.data();
       const sid  = secDoc.id;
 
-      // Si la sección está oculta, igual cargamos subcolecciones para consistencia,
-      // pero luego filtramos abajo (o podríamos cortar aquí con null).
       const [itemsSnap, toppingsSnap] = await Promise.all([
         getDocs(collection(db, "sections", sid, "items")).catch(()=>({docs:[]})),
         getDocs(collection(db, "sections", sid, "toppings")).catch(()=>({docs:[]})),
@@ -240,10 +238,109 @@ function renderTab(tabId){
   `;
 }
 
+/* ========= Popup promo (imagen) desde settings/menu ========= */
+function promoKey(version, lang){
+  return `esencia_promo_seen_${String(version || "v0")}_${lang}`;
+}
+
+function setupPromoModal(){
+  const modal = $("#promo-modal");
+  if (!modal) return;
+
+  // Cerrar por overlay o botones
+  $all("[data-promo-close]", modal).forEach(el => {
+    el.addEventListener("click", () => hidePromoModal());
+  });
+
+  // No volver a mostrar (solo para esta versión + idioma)
+  const dont = $("#promo-dontshow");
+  if (dont) {
+    dont.addEventListener("click", () => {
+      const version = modal.dataset.version || "v0";
+      try { localStorage.setItem(promoKey(version, LOCALE), "1"); } catch {}
+      hidePromoModal();
+    });
+  }
+}
+
+function showPromoModal({ title, imageUrl, linkUrl, alt, version }){
+  const modal = $("#promo-modal");
+  if (!modal) return;
+
+  modal.dataset.version = version || "v0";
+
+  // Si ya lo vio (esta versión + idioma), no mostrar
+  try {
+    if (localStorage.getItem(promoKey(version, LOCALE)) === "1") return;
+  } catch {}
+
+  const t = $("#promo-title");
+  const img = $("#promo-img");
+  const a = $("#promo-link");
+
+  if (t) t.textContent = title || (LOCALE === "en" ? "New & featured" : "Novedades");
+
+  if (img) {
+    img.src = imageUrl || "";
+    img.alt = alt || (LOCALE === "en" ? "Promotion" : "Promoción");
+  }
+
+  if (a) {
+    if (linkUrl && linkUrl !== "#") {
+      a.href = linkUrl;
+      a.style.pointerEvents = "auto";
+    } else {
+      a.href = "#";
+      a.style.pointerEvents = "none"; // si no hay link, solo imagen
+    }
+  }
+
+  modal.classList.remove("promoHidden");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function hidePromoModal(){
+  const modal = $("#promo-modal");
+  if (!modal) return;
+  modal.classList.add("promoHidden");
+  modal.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+function maybeShowPromo(meta){
+  if (!meta) return;
+
+  const enabled = !!meta.promo_enabled;
+  if (!enabled) return;
+
+  const version = meta.promo_version || "v1";
+
+  const imageUrl = meta.promo_image_url || "";
+  if (!imageUrl) return;
+
+  // Alt/title multi-idioma opcionales (si no existen, usa fallback)
+  const altObj = meta.promo_alt || {};
+  const alt = (LOCALE === "en" ? (altObj.en || altObj.es) : (altObj.es || altObj.en)) || "";
+
+  const titleObj = meta.promo_title || {};
+  const title = (LOCALE === "en" ? (titleObj.en || titleObj.es) : (titleObj.es || titleObj.en)) || "";
+
+  const linkObj = meta.promo_link || {};
+  const linkUrl = (typeof linkObj === "string")
+    ? linkObj
+    : (LOCALE === "en" ? (linkObj.en || linkObj.es) : (linkObj.es || linkObj.en)) || "";
+
+  showPromoModal({ title, imageUrl, linkUrl, alt, version });
+}
+
 /* ========= Init ========= */
 (async ()=>{
   const app = $("#app");
   app.innerHTML = `<div class="loading">${ LOCALE==="en" ? "Loading menu…" : "Cargando carta…" }</div>`;
+
+  // Prepara listeners del popup (si existe en el DOM)
+  setupPromoModal();
 
   try{
     const { meta, sections } = await loadData();
@@ -256,6 +353,9 @@ function renderTab(tabId){
     buildNav(groupsAvailable);
 
     renderTab(groupsAvailable[0] || "poffertjes");
+
+    // Mostrar popup si está activado en settings/menu
+    maybeShowPromo(STATE.meta);
 
     if (meta && (meta.igic_note || meta.igic_note_en)) {
       const ig = $("#igic-note");
