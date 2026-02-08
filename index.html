@@ -41,6 +41,32 @@
     .hidden{display:none !important;}
   </style>
 </head>
+
+<!-- POPUP PROMO -->
+<div id="promo-modal" class="promoHidden" aria-hidden="true">
+  <div class="promoOverlay" data-promo-close></div>
+
+  <div class="promoCard" role="dialog" aria-modal="true" aria-labelledby="promo-title">
+    <button class="promoClose" aria-label="Cerrar" data-promo-close>✕</button>
+
+    <h2 id="promo-title" class="promoTitle"></h2>
+
+    <a id="promo-link" class="promoLink" href="#" target="_blank" rel="noopener">
+      <img id="promo-img" class="promoImg" src="" alt="" />
+    </a>
+
+    <div class="promoActions">
+      <button id="promo-skip" class="promoBtn promoBtnSecondary" data-promo-close>
+        Ver carta
+      </button>
+      <button id="promo-dontshow" class="promoBtn promoBtnGhost">
+        No volver a mostrar
+      </button>
+    </div>
+  </div>
+</div>
+
+  
 <body>
   <header class="site-header">
     <div class="brand">
