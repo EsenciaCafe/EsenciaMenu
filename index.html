@@ -42,32 +42,32 @@
   </style>
 </head>
 
-<!-- POPUP PROMO -->
-<div id="promo-modal" class="promoHidden" aria-hidden="true">
-  <div class="promoOverlay" data-promo-close></div>
+<body>
 
-  <div class="promoCard" role="dialog" aria-modal="true" aria-labelledby="promo-title">
-    <button class="promoClose" aria-label="Cerrar" data-promo-close>✕</button>
+  <!-- POPUP PROMO (SIEMPRE DENTRO DE BODY) -->
+  <div id="promo-modal" class="promoHidden" aria-hidden="true">
+    <div class="promoOverlay" data-promo-close></div>
 
-    <h2 id="promo-title" class="promoTitle"></h2>
+    <div class="promoCard" role="dialog" aria-modal="true" aria-labelledby="promo-title">
+      <button class="promoClose" aria-label="Cerrar" data-promo-close>✕</button>
 
-    <a id="promo-link" class="promoLink" href="#" target="_blank" rel="noopener">
-      <img id="promo-img" class="promoImg" src="" alt="" />
-    </a>
+      <h2 id="promo-title" class="promoTitle"></h2>
 
-    <div class="promoActions">
-      <button id="promo-skip" class="promoBtn promoBtnSecondary" data-promo-close>
-        Ver carta
-      </button>
-      <button id="promo-dontshow" class="promoBtn promoBtnGhost">
-        No volver a mostrar
-      </button>
+      <a id="promo-link" class="promoLink" href="#" target="_blank" rel="noopener">
+        <img id="promo-img" class="promoImg" src="" alt="" />
+      </a>
+
+      <div class="promoActions">
+        <button id="promo-skip" class="promoBtn promoBtnSecondary" data-promo-close>
+          Ver carta
+        </button>
+        <button id="promo-dontshow" class="promoBtn promoBtnGhost">
+          No volver a mostrar
+        </button>
+      </div>
     </div>
   </div>
-</div>
 
-  
-<body>
   <header class="site-header">
     <div class="brand">
       <img src="logo_letras.png" alt="Esencia" class="logo-img" />
@@ -97,51 +97,157 @@
     <footer class="site-footer"><small id="igic-note">IGIC incluido</small></footer>
   </main>
 
-  <!-- Firebase lo puedes dejar cargado global -->
-  <script type="module" src="firebase.js"></script>
+  <!-- Import: firebase.js (debe exportar db) + Firestore -->
+  <script type="module">
+    import { db } from "./firebase.js";
+    import { getDoc, collection, doc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
-  <script>
-  // Elementos
-  const landing  = document.getElementById("landing");
-  const menu     = document.getElementById("menu");
-  const switchEl = document.getElementById("lang-switch");
-  const chipEs   = document.getElementById("chip-es");
-  const chipEn   = document.getElementById("chip-en");
+    // Elementos
+    const landing  = document.getElementById("landing");
+    const menu     = document.getElementById("menu");
+    const switchEl = document.getElementById("lang-switch");
+    const chipEs   = document.getElementById("chip-es");
+    const chipEn   = document.getElementById("chip-en");
 
-  function setActiveChip(lang){
-    chipEs.classList.toggle("active", lang==="es");
-    chipEn.classList.toggle("active", lang==="en");
-  }
-
-  // Mostrar carta SOLO cuando el usuario elige
-  function showMenuWith(lang){
-    window.LOCALE = (lang === "en") ? "en" : "es";
-    landing.classList.add("hidden");
-    menu.classList.remove("hidden");
-    switchEl.classList.remove("hidden");
-    setActiveChip(window.LOCALE);
-
-    if (!window.__menuLoaded) {
-      window.__menuLoaded = true;
-      const script = document.createElement("script");
-      script.type = "module";
-      script.src = "./app.multilang.js";
-      document.body.appendChild(script);
-    } else {
-      window.__setLocale?.(window.LOCALE);
+    function setActiveChip(lang){
+      chipEs.classList.toggle("active", lang==="es");
+      chipEn.classList.toggle("active", lang==="en");
     }
-  }
 
-  // Click en banderas (landing)
-  document.getElementById("btn-es").addEventListener("click", ()=> showMenuWith("es"));
-  document.getElementById("btn-en").addEventListener("click", ()=> showMenuWith("en"));
+    // ===== POPUP (solo imagen) =====
+    const promoModal = document.getElementById("promo-modal");
+    const promoTitle = document.getElementById("promo-title");
+    const promoImg   = document.getElementById("promo-img");
+    const promoLink  = document.getElementById("promo-link");
+    const promoDont  = document.getElementById("promo-dontshow");
 
-  // Chips del header (cambiar idioma dentro de la carta)
-  chipEs.addEventListener("click", ()=> showMenuWith("es"));
-  chipEn.addEventListener("click", ()=> showMenuWith("en"));
+    function promoKey(version, lang){
+      return `esencia_promo_seen_${String(version || "v0")}_${lang}`;
+    }
 
-  // Importante: no leemos ni guardamos preferencia
-  // -> Siempre se queda en la landing hasta que el usuario elige.
-</script>
+    function hidePromo(){
+      if (!promoModal) return;
+      promoModal.classList.add("promoHidden");
+      promoModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+
+    function showPromo({ title, imageUrl, linkUrl, alt, version, lang }){
+      if (!promoModal) return;
+
+      try {
+        if (localStorage.getItem(promoKey(version, lang)) === "1") return;
+      } catch {}
+
+      promoModal.dataset.version = version || "v0";
+
+      if (promoTitle) promoTitle.textContent = title || (lang === "en" ? "New & featured" : "Novedades");
+      if (promoImg) {
+        promoImg.src = imageUrl;
+        promoImg.alt = alt || (lang === "en" ? "Promotion" : "Promoción");
+      }
+
+      if (promoLink) {
+        if (linkUrl) {
+          promoLink.href = linkUrl;
+          promoLink.style.pointerEvents = "auto";
+        } else {
+          promoLink.href = "#";
+          promoLink.style.pointerEvents = "none";
+        }
+      }
+
+      promoModal.classList.remove("promoHidden");
+      promoModal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    }
+
+    function setupPromoListeners(){
+      if (!promoModal) return;
+      promoModal.querySelectorAll("[data-promo-close]").forEach(el => {
+        el.addEventListener("click", hidePromo);
+      });
+      if (promoDont) {
+        promoDont.addEventListener("click", () => {
+          const version = promoModal.dataset.version || "v0";
+          const lang = window.LOCALE || "es";
+          try { localStorage.setItem(promoKey(version, lang), "1"); } catch {}
+          hidePromo();
+        });
+      }
+    }
+
+    async function fetchPromoMeta(){
+      try {
+        const snap = await getDoc(doc(collection(db, "settings"), "menu"));
+        if (!snap.exists()) return null;
+        return snap.data() || null;
+      } catch {
+        return null;
+      }
+    }
+
+    let PROMO_META_CACHE = null;
+    async function getPromoMeta(){
+      if (PROMO_META_CACHE) return PROMO_META_CACHE;
+      PROMO_META_CACHE = await fetchPromoMeta();
+      return PROMO_META_CACHE;
+    }
+
+    setupPromoListeners();
+
+    // Mostrar carta SOLO cuando el usuario elige
+    async function showMenuWith(lang){
+      window.LOCALE = (lang === "en") ? "en" : "es";
+      landing.classList.add("hidden");
+      menu.classList.remove("hidden");
+      switchEl.classList.remove("hidden");
+      setActiveChip(window.LOCALE);
+
+      // Popup promo al entrar
+      (async () => {
+        const meta = await getPromoMeta();
+        if (!meta || !meta.promo_enabled) return;
+
+        const version = meta.promo_version || "v1";
+        const imageUrl = meta.promo_image_url || "";
+        if (!imageUrl) return;
+
+        const titleObj = meta.promo_title || {};
+        const altObj   = meta.promo_alt || {};
+        const linkObj  = meta.promo_link || {};
+
+        const title = (lang === "en" ? (titleObj.en || titleObj.es) : (titleObj.es || titleObj.en)) || "";
+        const alt   = (lang === "en" ? (altObj.en || altObj.es) : (altObj.es || altObj.en)) || "";
+
+        const linkUrl = (typeof linkObj === "string")
+          ? linkObj
+          : (lang === "en" ? (linkObj.en || linkObj.es) : (linkObj.es || linkObj.en)) || "";
+
+        showPromo({ title, imageUrl, linkUrl, alt, version, lang });
+      })();
+
+      if (!window.__menuLoaded) {
+        window.__menuLoaded = true;
+        const script = document.createElement("script");
+        script.type = "module";
+        script.src = "./app.multilang.js";
+        document.body.appendChild(script);
+      } else {
+        window.__setLocale?.(window.LOCALE);
+      }
+    }
+
+    // Click en banderas (landing)
+    document.getElementById("btn-es").addEventListener("click", ()=> showMenuWith("es"));
+    document.getElementById("btn-en").addEventListener("click", ()=> showMenuWith("en"));
+
+    // Chips del header (cambiar idioma dentro de la carta)
+    chipEs.addEventListener("click", ()=> showMenuWith("es"));
+    chipEn.addEventListener("click", ()=> showMenuWith("en"));
+
+    // Importante: no leemos ni guardamos preferencia
+    // -> Siempre se queda en la landing hasta que el usuario elige.
+  </script>
 </body>
 </html>
