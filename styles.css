@@ -270,3 +270,38 @@ img, video{ max-width:100%; height:auto; display:block; }
   padding: 10px 14px;
 }
 .promoBtnGhost:hover{ background: rgba(0,0,0,.04); }
+
+/* ===== Animación premium popup ===== */
+
+#promo-modal{
+  opacity:0;
+  transition: opacity .25s ease;
+  backdrop-filter: blur(0px);
+}
+
+#promo-modal:not(.promoHidden){
+  opacity:1;
+  backdrop-filter: blur(3px);
+}
+
+.promoCard{
+  transform: translate(-50%, -45%) scale(.96);
+  opacity:0;
+  transition:
+    transform .28s cubic-bezier(.22,1,.36,1),
+    opacity .22s ease;
+}
+
+#promo-modal:not(.promoHidden) .promoCard{
+  transform: translate(-50%, -50%) scale(1);
+  opacity:1;
+}
+
+.promoImg{
+  transition: transform .35s ease;
+}
+
+#promo-modal:not(.promoHidden) .promoImg{
+  transform: scale(1.02);
+}
+
