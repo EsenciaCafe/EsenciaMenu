@@ -1,0 +1,44 @@
+name: Actualizar lista de imágenes popup
+
+on:
+push:
+paths:
+- “assets/popup/**”
+- “.github/workflows/update-popup-images.yml”
+workflow_dispatch:
+
+permissions:
+contents: write
+
+jobs:
+update-images-json:
+runs-on: ubuntu-latest
+
+steps:
+  - name: Descargar repo
+    uses: actions/checkout@v4
+  - name: Generar assets/popup/images.json
+    shell: bash
+    run: |
+      mkdir -p assets/popup
+      python3 - <<'PY'
+      from pathlib import Path
+      import json
+      folder = Path("assets/popup")
+      allowed = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
+      files = sorted(
+          p.name for p in folder.iterdir()
+          if p.is_file()
+          and p.suffix.lower() in allowed
+          and p.name != "images.json"
+      )
+      (folder / "images.json").write_text(
+          json.dumps(files, ensure_ascii=False, indent=2) + "\n",
+          encoding="utf-8"
+      )
+      PY
+  - name: Commit automático si cambió images.json
+    uses: stefanzweifel/git-auto-commit-action@v5
+    with:
+      commit_message: "Actualizar lista de imágenes popup"
+      file_pattern: assets/popup/images.json
