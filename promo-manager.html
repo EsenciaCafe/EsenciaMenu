@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Promos · Esencia</title>
+  <style>
+    :root{
+      --bg:#f7f2ea;
+      --card:#fffaf3;
+      --text:#2f2923;
+      --muted:#8c7d6e;
+      --line:#eadfce;
+      --accent:#b18453;
+      --accent-dark:#7a5733;
+      --ok:#2d7d46;
+      --danger:#b64b4b;
+      --shadow: 0 18px 45px rgba(83, 62, 38, .12);
+      --radius:22px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 10% -10%, rgba(177,132,83,.18), transparent 35%),
+        radial-gradient(circle at 100% 0%, rgba(255,255,255,.9), transparent 28%),
+        var(--bg);
+      color:var(--text);
+      min-height:100vh;
+      padding:24px;
+    }
+    .wrap{max-width:1100px;margin:0 auto}
+    header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom:22px;
+    }
+    .brand{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    h1{
+      margin:0;
+      font-size:clamp(28px,5vw,46px);
+      letter-spacing:-.05em;
+    }
+    .subtitle{
+      color:var(--muted);
+      font-size:15px;
+    }
+    .pill{
+      border:1px solid var(--line);
+      background:rgba(255,250,243,.75);
+      border-radius:999px;
+      padding:10px 14px;
+      color:var(--muted);
+      font-size:13px;
+      white-space:nowrap;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 390px 1fr;
+      gap:18px;
+      align-items:start;
+    }
+    .card{
+      background:rgba(255,250,243,.88);
+      border:1px solid var(--line);
+      box-shadow:var(--shadow);
+      border-radius:var(--radius);
+      padding:18px;
+      backdrop-filter: blur(10px);
+    }
+    .card h2{
+      margin:0 0 14px;
+      font-size:18px;
+      letter-spacing:-.02em;
+    }
+    .row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      padding:13px 0;
+      border-top:1px solid var(--line);
+    }
+    .row:first-of-type{border-top:0}
+    label{
+      display:block;
+      font-size:13px;
+      color:var(--muted);
+      margin:0 0 8px;
+    }
+    input[type="text"]{
+      width:100%;
+      border:1px solid var(--line);
+      background:white;
+      border-radius:14px;
+      padding:13px 14px;
+      font-size:15px;
+      color:var(--text);
+      outline:none;
+    }
+    input[type="text"]:focus{
+      border-color:rgba(177,132,83,.7);
+      box-shadow:0 0 0 4px rgba(177,132,83,.14);
+    }
+    .switch{
+      position:relative;
+      width:58px;height:34px;
+      flex:0 0 auto;
+    }
+    .switch input{display:none}
+    .slider{
+      position:absolute;inset:0;
+      background:#d8caba;
+      border-radius:999px;
+      cursor:pointer;
+      transition:.2s;
+    }
+    .slider:before{
+      content:"";
+      position:absolute;
+      width:28px;height:28px;
+      left:3px;top:3px;
+      border-radius:50%;
+      background:white;
+      box-shadow:0 4px 12px rgba(0,0,0,.18);
+      transition:.2s;
+    }
+    .switch input:checked + .slider{background:var(--accent)}
+    .switch input:checked + .slider:before{transform:translateX(24px)}
+    .previewBox{
+      border-radius:20px;
+      overflow:hidden;
+      background:#efe5d8;
+      border:1px solid var(--line);
+      min-height:360px;
+      display:grid;
+      place-items:center;
+      position:relative;
+    }
+    .previewBox img{
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      max-height:540px;
+      display:block;
+      background:#f2eadf;
+    }
+    .empty{
+      color:var(--muted);
+      padding:30px;
+      text-align:center;
+      line-height:1.4;
+    }
+    .actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:14px;
+    }
+    button{
+      border:0;
+      border-radius:15px;
+      padding:13px 16px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:14px;
+      transition:.15s;
+    }
+    .primary{
+      background:var(--text);
+      color:white;
+      flex:1;
+    }
+    .secondary{
+      background:#efe5d8;
+      color:var(--accent-dark);
+    }
+    button:hover{transform:translateY(-1px)}
+    button:disabled{opacity:.55;cursor:not-allowed;transform:none}
+    .status{
+      margin-top:12px;
+      min-height:21px;
+      color:var(--muted);
+      font-size:14px;
+    }
+    .status.ok{color:var(--ok)}
+    .status.err{color:var(--danger)}
+    .galleryHeader{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      margin-bottom:12px;
+    }
+    .gallery{
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(125px,1fr));
+      gap:12px;
+    }
+    .thumb{
+      border:1px solid var(--line);
+      background:white;
+      border-radius:18px;
+      padding:8px;
+      cursor:pointer;
+      transition:.15s;
+      position:relative;
+      min-height:150px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .thumb:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(83,62,38,.10)}
+    .thumb.selected{
+      outline:3px solid rgba(177,132,83,.35);
+      border-color:var(--accent);
+    }
+    .thumb img{
+      width:100%;
+      aspect-ratio:1/1.2;
+      object-fit:cover;
+      border-radius:13px;
+      background:#efe5d8;
+    }
+    .thumb span{
+      font-size:12px;
+      color:var(--muted);
+      word-break:break-word;
+      line-height:1.2;
+    }
+    .small{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.4;
+    }
+    @media (max-width: 850px){
+      body{padding:16px}
+      header{align-items:flex-start;flex-direction:column}
+      .grid{grid-template-columns:1fr}
+      .previewBox{min-height:280px}
+      .pill{white-space:normal}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <h1>Promos Esencia</h1>
+        <div class="subtitle">Activa, cambia y previsualiza la imagen promocional del menú.</div>
+      </div>
+      <div class="pill">Firestore: settings / menu</div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <h2>Estado de la promo</h2>
+
+        <div class="row">
+          <div>
+            <strong>Popup activo</strong>
+            <div class="small">Controla el campo <code>promo_enabled</code></div>
+          </div>
+          <label class="switch" aria-label="Activar o desactivar promo">
+            <input id="enabled" type="checkbox" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div style="margin-top:14px">
+          <label for="imageUrl">Imagen seleccionada</label>
+          <input id="imageUrl" type="text" placeholder="assets/popup/imagen.webp" />
+          <div class="small" style="margin-top:8px">Puedes elegir una imagen de la galería o pegar una ruta manual.</div>
+        </div>
+
+        <div class="actions">
+          <button id="saveBtn" class="primary">Guardar cambios</button>
+          <button id="reloadBtn" class="secondary" type="button">Recargar</button>
+        </div>
+
+        <div id="status" class="status"></div>
+      </section>
+
+      <section class="card">
+        <h2>Vista previa</h2>
+        <div id="preview" class="previewBox">
+          <div class="empty">Selecciona una imagen para verla aquí.</div>
+        </div>
+      </section>
+
+      <section class="card" style="grid-column:1/-1">
+        <div class="galleryHeader">
+          <div>
+            <h2 style="margin-bottom:4px">Imágenes disponibles</h2>
+            <div class="small">Se cargan desde <code>assets/popup/images.json</code></div>
+          </div>
+          <button id="galleryReloadBtn" class="secondary" type="button">Actualizar galería</button>
+        </div>
+        <div id="gallery" class="gallery"></div>
+        <div id="galleryStatus" class="status"></div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA_knSYppsFYJkXQHroW83Txp-jWLIxAsE",
+      authDomain: "esenciacafe-44755.firebaseapp.com",
+      projectId: "esenciacafe-44755",
+      storageBucket: "esenciacafe-44755.firebasestorage.app",
+      messagingSenderId: "1058059262944",
+      appId: "1:1058059262944:web:e3c54feef2fb357ffa6985",
+      measurementId: "G-2BM2Z4YJ43"
+    };
+
+    const IMAGE_FOLDER = "assets/popup/";
+    const IMAGES_JSON = IMAGE_FOLDER + "images.json";
+    const MENU_DOC = ["settings", "menu"];
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const menuRef = doc(db, ...MENU_DOC);
+
+    const enabledEl = document.getElementById("enabled");
+    const imageUrlEl = document.getElementById("imageUrl");
+    const saveBtn = document.getElementById("saveBtn");
+    const reloadBtn = document.getElementById("reloadBtn");
+    const statusEl = document.getElementById("status");
+    const previewEl = document.getElementById("preview");
+    const galleryEl = document.getElementById("gallery");
+    const galleryStatusEl = document.getElementById("galleryStatus");
+    const galleryReloadBtn = document.getElementById("galleryReloadBtn");
+
+    let currentImages = [];
+
+    function setStatus(msg, type = "") {
+      statusEl.textContent = msg;
+      statusEl.className = "status " + type;
+    }
+
+    function setGalleryStatus(msg, type = "") {
+      galleryStatusEl.textContent = msg;
+      galleryStatusEl.className = "status " + type;
+    }
+
+    function normalizeUrl(value) {
+      const raw = (value || "").trim();
+      if (!raw) return "";
+      if (/^https?:\/\//i.test(raw)) return raw;
+      return raw.replace(/^\/+/, "");
+    }
+
+    function fileToUrl(file) {
+      if (typeof file === "string") {
+        if (/^https?:\/\//i.test(file)) return file;
+        if (file.startsWith(IMAGE_FOLDER)) return file;
+        return IMAGE_FOLDER + file.replace(/^\/+/, "");
+      }
+      return file?.url || "";
+    }
+
+    function getNiceName(item) {
+      if (typeof item === "string") return item;
+      return item?.name || item?.file || item?.url || "imagen";
+    }
+
+    function updatePreview() {
+      const url = normalizeUrl(imageUrlEl.value);
+      if (!url) {
+        previewEl.innerHTML = '<div class="empty">Selecciona una imagen para verla aquí.</div>';
+        return;
+      }
+      previewEl.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
+      img.alt = "Vista previa promo";
+      img.onerror = () => {
+        previewEl.innerHTML = '<div class="empty">No se pudo cargar la imagen.<br>Revisa que la ruta sea correcta.</div>';
+      };
+      previewEl.appendChild(img);
+    }
+
+    function markSelected() {
+      const selected = normalizeUrl(imageUrlEl.value);
+      document.querySelectorAll(".thumb").forEach(el => {
+        el.classList.toggle("selected", normalizeUrl(el.dataset.url) === selected);
+      });
+    }
+
+    async function loadMenuConfig() {
+      setStatus("Cargando configuración...");
+      const snap = await getDoc(menuRef);
+      if (!snap.exists()) {
+        setStatus("No existe el documento settings/menu.", "err");
+        return;
+      }
+
+      const data = snap.data();
+      enabledEl.checked = Boolean(data.promo_enabled);
+      imageUrlEl.value = data.promo_image_url || "";
+      updatePreview();
+      markSelected();
+      setStatus("Configuración cargada.", "ok");
+    }
+
+    async function saveMenuConfig() {
+      const imageUrl = normalizeUrl(imageUrlEl.value);
+      saveBtn.disabled = true;
+      setStatus("Guardando...");
+
+      try {
+        await setDoc(menuRef, {
+          promo_enabled: enabledEl.checked,
+          promo_image_url: imageUrl,
+          promo_version: String(Date.now())
+        }, { merge: true });
+
+        setStatus("Guardado correctamente.", "ok");
+      } catch (err) {
+        console.error(err);
+        setStatus("Error al guardar. Revisa permisos de Firestore.", "err");
+      } finally {
+        saveBtn.disabled = false;
+      }
+    }
+
+    async function loadGallery() {
+      setGalleryStatus("Cargando imágenes...");
+      galleryEl.innerHTML = "";
+
+      try {
+        const res = await fetch(IMAGES_JSON + "?v=" + Date.now(), { cache: "no-store" });
+        if (!res.ok) throw new Error("No se encontró images.json");
+
+        currentImages = await res.json();
+
+        if (!Array.isArray(currentImages) || currentImages.length === 0) {
+          galleryEl.innerHTML = '<div class="empty">No hay imágenes en el JSON.</div>';
+          setGalleryStatus("");
+          return;
+        }
+
+        currentImages.forEach(item => {
+          const url = fileToUrl(item);
+          const name = getNiceName(item);
+
+          const card = document.createElement("button");
+          card.type = "button";
+          card.className = "thumb";
+          card.dataset.url = url;
+          card.innerHTML = `
+            <img src="${url}" alt="${name}" loading="lazy">
+            <span>${name}</span>
+          `;
+
+          card.addEventListener("click", () => {
+            imageUrlEl.value = url;
+            updatePreview();
+            markSelected();
+          });
+
+          galleryEl.appendChild(card);
+        });
+
+        markSelected();
+        setGalleryStatus(`${currentImages.length} imagen(es) cargadas.`, "ok");
+      } catch (err) {
+        console.error(err);
+        galleryEl.innerHTML = '<div class="empty">No se pudo cargar la galería. Comprueba que exista <code>assets/popup/images.json</code>.</div>';
+        setGalleryStatus("Error cargando galería.", "err");
+      }
+    }
+
+    imageUrlEl.addEventListener("input", () => {
+      updatePreview();
+      markSelected();
+    });
+
+    saveBtn.addEventListener("click", saveMenuConfig);
+    reloadBtn.addEventListener("click", loadMenuConfig);
+    galleryReloadBtn.addEventListener("click", loadGallery);
+
+    await Promise.allSettled([loadMenuConfig(), loadGallery()]);
+  </script>
+</body>
+</html>
