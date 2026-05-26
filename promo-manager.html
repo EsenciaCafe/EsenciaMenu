@@ -358,330 +358,262 @@
     </main>
   </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+  <<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithRedirect,
+  getRedirectResult,
+  setPersistence,
+  browserLocalPersistence,
+  onAuthStateChanged,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
-    import {
-      getFirestore,
-      doc,
-      getDoc,
-      setDoc
-    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyA_knSYppsFYJkXQHroW83Txp-jWLIxAsE",
+  authDomain: "esenciacafe-44755.firebaseapp.com",
+  projectId: "esenciacafe-44755",
+  storageBucket: "esenciacafe-44755.firebasestorage.app",
+  messagingSenderId: "1058059262944",
+  appId: "1:1058059262944:web:e3c54feef2fb357ffa6985",
+  measurementId: "G-2BM2Z4YJ43"
+};
 
-    import {
-      getAuth,
-      GoogleAuthProvider,
-      signInWithRedirect,
-      getRedirectResult,,
-      setPersistence,
-      browserLocalPersistence,
-      onAuthStateChanged,
-      signOut
-    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+const ADMIN_UID = "8sSVQe3BKJVu7QiPrYF9gTrPrtG2";
+const IMAGE_FOLDER = "assets/popup/";
+const IMAGES_JSON = IMAGE_FOLDER + "images.json";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyA_knSYppsFYJkXQHroW83Txp-jWLIxAsE",
-      authDomain: "esenciacafe-44755.firebaseapp.com",
-      projectId: "esenciacafe-44755",
-      storageBucket: "esenciacafe-44755.firebasestorage.app",
-      messagingSenderId: "1058059262944",
-      appId: "1:1058059262944:web:e3c54feef2fb357ffa6985",
-      measurementId: "G-2BM2Z4YJ43"
-    };
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+const menuRef = doc(db, "settings", "menu");
 
-    const IMAGE_FOLDER = "assets/popup/";
-    const IMAGES_JSON = IMAGE_FOLDER + "images.json";
-    const ADMIN_UID = "8sSVQe3BKJVu7QiPrYF9gTrPrtG2";
+const $ = (id) => document.getElementById(id);
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-    const provider = new GoogleAuthProvider();
+const enabledEl = $("enabled");
+const imageUrlEl = $("imageUrl");
+const saveBtn = $("saveBtn");
+const reloadBtn = $("reloadBtn");
+const loginBtn = $("loginBtn");
+const logoutBtn = $("logoutBtn");
+const statusEl = $("status");
+const previewEl = $("preview");
+const galleryEl = $("gallery");
+const galleryStatusEl = $("galleryStatus");
+const galleryReloadBtn = $("galleryReloadBtn");
 
-    await setPersistence(auth, browserLocalPersistence);
-
-    const menuRef = doc(db, "settings", "menu");
-
-    const enabledEl = document.getElementById("enabled");
-    const imageUrlEl = document.getElementById("imageUrl");
-    const saveBtn = document.getElementById("saveBtn");
-    const reloadBtn = document.getElementById("reloadBtn");
-    const loginBtn = document.getElementById("loginBtn");
-    const logoutBtn = document.getElementById("logoutBtn");
-    const statusEl = document.getElementById("status");
-    const previewEl = document.getElementById("preview");
-    const galleryEl = document.getElementById("gallery");
-    const galleryStatusEl = document.getElementById("galleryStatus");
-    const galleryReloadBtn = document.getElementById("galleryReloadBtn");
-
-    function setStatus(msg, type = "") {
-      statusEl.textContent = msg;
-      statusEl.className = "status " + type;
-    }
-
-    function setGalleryStatus(msg, type = "") {
-      galleryStatusEl.textContent = msg;
-      galleryStatusEl.className = "status " + type;
-    }
-
-    function normalizeUrl(value) {
-      const raw = (value || "").trim();
-
-      if (!raw) return "";
-
-      if (raw.includes("github.com") && raw.includes("/tree/")) {
-        return "";
-      }
-
-      if (raw.includes("github.com") && raw.includes("/blob/")) {
-        return raw
-          .replace("https://github.com/EsenciaCafe/EsenciaMenu/blob/main/", "")
-          .replace(/^\/+/, "");
-      }
-
-      if (/^https?:\/\//i.test(raw)) return raw;
-
-      return raw.replace(/^\/+/, "");
-    }
-
-    function updatePreview() {
-      const url = normalizeUrl(imageUrlEl.value);
-
-      if (!url) {
-        previewEl.innerHTML = `
-          <div class="empty">
-            Ruta inválida.<br>
-            Usa <code>assets/popup/imagen.webp</code>
-          </div>
-        `;
-        return;
-      }
-
-      previewEl.innerHTML = "";
-
-      const img = document.createElement("img");
-      img.src = url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
-      img.alt = "Vista previa promo";
-
-      img.onerror = () => {
-        previewEl.innerHTML = `
-          <div class="empty">
-            No se pudo cargar la imagen.<br>
-            Revisa que exista en <code>assets/popup/</code>
-          </div>
-        `;
-      };
-
-      previewEl.appendChild(img);
-    }
-
-    function markSelected() {
-      const selected = normalizeUrl(imageUrlEl.value);
-
-      document.querySelectorAll(".thumb").forEach(el => {
-        el.classList.toggle(
-          "selected",
-          normalizeUrl(el.dataset.url) === selected
-        );
-      });
-    }
-
-    async function loadMenuConfig() {
-      setStatus("Cargando configuración...");
-
-      try {
-        const snap = await getDoc(menuRef);
-
-        if (!snap.exists()) {
-          setStatus("No existe el documento settings/menu", "err");
-          return;
-        }
-
-        const data = snap.data();
-
-        enabledEl.checked = Boolean(data.promo_enabled);
-        imageUrlEl.value = data.promo_image_url || "";
-
-        updatePreview();
-        markSelected();
-
-        setStatus("Configuración cargada", "ok");
-
-      } catch (err) {
-        console.error(err);
-        setStatus("Error cargando configuración", "err");
-      }
-    }
-
-    async function saveMenuConfig() {
-      const user = auth.currentUser;
-
-      if (!user || user.uid !== ADMIN_UID) {
-        setStatus("Debes iniciar sesión con tu cuenta admin", "err");
-        return;
-      }
-
-      const imageUrl = normalizeUrl(imageUrlEl.value);
-
-      if (!imageUrl) {
-        setStatus("La URL de la imagen no es válida", "err");
-        return;
-      }
-
-      saveBtn.disabled = true;
-      setStatus("Guardando...");
-
-      try {
-        await setDoc(
-          menuRef,
-          {
-            promo_enabled: enabledEl.checked,
-            promo_image_url: imageUrl,
-            promo_version: String(Date.now())
-          },
-          { merge: true }
-        );
-
-        setStatus("Guardado correctamente", "ok");
-
-      } catch (err) {
-        console.error(err);
-        setStatus("Error guardando. Revisa permisos de Firestore.", "err");
-
-      } finally {
-        saveBtn.disabled = false;
-      }
-    }
-
-    async function loadGallery() {
-      setGalleryStatus("Cargando imágenes...");
-      galleryEl.innerHTML = "";
-
-      try {
-        const res = await fetch(IMAGES_JSON + "?v=" + Date.now(), {
-          cache: "no-store"
-        });
-
-        if (!res.ok) {
-          throw new Error("No existe images.json");
-        }
-
-        const images = await res.json();
-
-        if (!Array.isArray(images)) {
-          throw new Error("images.json no es una lista");
-        }
-
-        if (images.length === 0) {
-          galleryEl.innerHTML = `
-            <div class="empty">
-              No hay imágenes en <code>images.json</code>
-            </div>
-          `;
-          setGalleryStatus("");
-          return;
-        }
-
-        images.forEach(file => {
-          const url = file.startsWith("http")
-            ? file
-            : IMAGE_FOLDER + file.replace(/^\/+/, "");
-
-          const card = document.createElement("button");
-          card.type = "button";
-          card.className = "thumb";
-          card.dataset.url = url;
-
-          card.innerHTML = `
-            <img src="${url}?v=${Date.now()}" loading="lazy" alt="${file}">
-            <span>${file}</span>
-          `;
-
-          card.addEventListener("click", () => {
-            imageUrlEl.value = url;
-            updatePreview();
-            markSelected();
-          });
-
-          galleryEl.appendChild(card);
-        });
-
-        markSelected();
-        setGalleryStatus(`${images.length} imagen(es) cargadas`, "ok");
-
-      } catch (err) {
-        console.error(err);
-
-        galleryEl.innerHTML = `
-          <div class="empty">
-            No se pudo cargar la galería.<br>
-            Comprueba que exista <code>assets/popup/images.json</code>
-          </div>
-        `;
-
-        setGalleryStatus("Error cargando imágenes", "err");
-      }
-    }
-
-    imageUrlEl.addEventListener("input", () => {
-      updatePreview();
-      markSelected();
-    });
-
-    enabledEl.addEventListener("change", () => {
-      setStatus("Cambio pendiente de guardar");
-    });
-
-    saveBtn.addEventListener("click", saveMenuConfig);
-    reloadBtn.addEventListener("click", loadMenuConfig);
-    galleryReloadBtn.addEventListener("click", loadGallery);
-
-    loginBtn.addEventListener("click", async () => {
-  try {
-    await signInWithRedirect(auth, provider);
-  } catch (err) {
-    console.error(err);
-    setStatus("Error iniciando sesión con Google", "err");
-  }
-});
-
-try {
-  await getRedirectResult(auth);
-} catch (err) {
-  console.error(err);
-  setStatus("Error recuperando sesión de Google", "err");
+function setStatus(msg, type = "") {
+  statusEl.textContent = msg;
+  statusEl.className = "status " + type;
 }
 
-    logoutBtn.addEventListener("click", async () => {
-      await signOut(auth);
+function setGalleryStatus(msg, type = "") {
+  galleryStatusEl.textContent = msg;
+  galleryStatusEl.className = "status " + type;
+}
+
+function normalizeUrl(value) {
+  const raw = (value || "").trim();
+  if (!raw) return "";
+
+  if (raw.includes("github.com") && raw.includes("/tree/")) return "";
+
+  if (raw.includes("github.com") && raw.includes("/blob/")) {
+    return raw
+      .replace("https://github.com/EsenciaCafe/EsenciaMenu/blob/main/", "")
+      .replace(/^\/+/, "");
+  }
+
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  return raw.replace(/^\/+/, "");
+}
+
+function updatePreview() {
+  const url = normalizeUrl(imageUrlEl.value);
+
+  if (!url) {
+    previewEl.innerHTML = `<div class="empty">Ruta inválida.</div>`;
+    return;
+  }
+
+  previewEl.innerHTML = "";
+
+  const img = document.createElement("img");
+  img.src = url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
+  img.alt = "Vista previa promo";
+
+  img.onerror = () => {
+    previewEl.innerHTML = `<div class="empty">No se pudo cargar la imagen.</div>`;
+  };
+
+  previewEl.appendChild(img);
+}
+
+function markSelected() {
+  const selected = normalizeUrl(imageUrlEl.value);
+
+  document.querySelectorAll(".thumb").forEach(el => {
+    el.classList.toggle("selected", normalizeUrl(el.dataset.url) === selected);
+  });
+}
+
+async function loadMenuConfig() {
+  try {
+    setStatus("Cargando configuración...");
+
+    const snap = await getDoc(menuRef);
+
+    if (!snap.exists()) {
+      setStatus("No existe settings/menu", "err");
+      return;
+    }
+
+    const data = snap.data();
+
+    enabledEl.checked = Boolean(data.promo_enabled);
+    imageUrlEl.value = data.promo_image_url || "";
+
+    updatePreview();
+    markSelected();
+
+    setStatus("Configuración cargada", "ok");
+  } catch (err) {
+    console.error(err);
+    setStatus("Error cargando configuración", "err");
+  }
+}
+
+async function saveMenuConfig() {
+  const user = auth.currentUser;
+
+  if (!user || user.uid !== ADMIN_UID) {
+    setStatus("Debes iniciar sesión con tu cuenta admin", "err");
+    return;
+  }
+
+  const imageUrl = normalizeUrl(imageUrlEl.value);
+
+  if (!imageUrl) {
+    setStatus("La URL de la imagen no es válida", "err");
+    return;
+  }
+
+  try {
+    saveBtn.disabled = true;
+    setStatus("Guardando...");
+
+    await setDoc(menuRef, {
+      promo_enabled: enabledEl.checked,
+      promo_image_url: imageUrl,
+      promo_version: String(Date.now())
+    }, { merge: true });
+
+    setStatus("Guardado correctamente", "ok");
+  } catch (err) {
+    console.error(err);
+    setStatus("Error guardando en Firestore", "err");
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+async function loadGallery() {
+  try {
+    setGalleryStatus("Cargando imágenes...");
+    galleryEl.innerHTML = "";
+
+    const res = await fetch(IMAGES_JSON + "?v=" + Date.now(), { cache: "no-store" });
+    const images = await res.json();
+
+    images.forEach(file => {
+      const url = file.startsWith("http") ? file : IMAGE_FOLDER + file;
+
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "thumb";
+      card.dataset.url = url;
+
+      card.innerHTML = `
+        <img src="${url}?v=${Date.now()}" loading="lazy" alt="${file}">
+        <span>${file}</span>
+      `;
+
+      card.addEventListener("click", () => {
+        imageUrlEl.value = url;
+        updatePreview();
+        markSelected();
+      });
+
+      galleryEl.appendChild(card);
     });
 
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        saveBtn.disabled = true;
-        logoutBtn.disabled = true;
-        loginBtn.disabled = false;
-        setStatus("Debes iniciar sesión con tu cuenta admin", "err");
-        return;
-      }
+    markSelected();
+    setGalleryStatus(`${images.length} imagen(es) cargadas`, "ok");
+  } catch (err) {
+    console.error(err);
+    galleryEl.innerHTML = `<div class="empty">No se pudo cargar la galería.</div>`;
+    setGalleryStatus("Error cargando imágenes", "err");
+  }
+}
 
-      loginBtn.disabled = true;
-      logoutBtn.disabled = false;
+async function initAuth() {
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+    await getRedirectResult(auth);
+  } catch (err) {
+    console.error(err);
+    setStatus("Error recuperando sesión de Google", "err");
+  }
 
-      if (user.uid !== ADMIN_UID) {
-        saveBtn.disabled = true;
-        setStatus("Esta cuenta no tiene permisos", "err");
-        return;
-      }
+  onAuthStateChanged(auth, (user) => {
+    if (!user) {
+      saveBtn.disabled = true;
+      loginBtn.disabled = false;
+      logoutBtn.disabled = true;
+      setStatus("Debes iniciar sesión con Google", "err");
+      return;
+    }
 
-      saveBtn.disabled = false;
-      setStatus("Sesión iniciada correctamente", "ok");
-    });
+    loginBtn.disabled = true;
+    logoutBtn.disabled = false;
 
-    await Promise.allSettled([
-      loadMenuConfig(),
-      loadGallery()
-    ]);
-  </script>
+    if (user.uid !== ADMIN_UID) {
+      saveBtn.disabled = true;
+      setStatus("Esta cuenta no tiene permisos", "err");
+      return;
+    }
+
+    saveBtn.disabled = false;
+    setStatus("Sesión iniciada correctamente", "ok");
+  });
+}
+
+loginBtn.addEventListener("click", async () => {
+  setStatus("Redirigiendo a Google...");
+  await signInWithRedirect(auth, provider);
+});
+
+logoutBtn.addEventListener("click", async () => {
+  await signOut(auth);
+});
+
+saveBtn.addEventListener("click", saveMenuConfig);
+reloadBtn.addEventListener("click", loadMenuConfig);
+galleryReloadBtn.addEventListener("click", loadGallery);
+
+imageUrlEl.addEventListener("input", () => {
+  updatePreview();
+  markSelected();
+});
+
+initAuth();
+loadMenuConfig();
+loadGallery();
+</script>
 </body>
 </html>
