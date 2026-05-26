@@ -17,9 +17,10 @@ jobs:
     steps:
       - name: Descargar repo
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generar assets/popup/images.json
-        shell: bash
         run: |
           mkdir -p assets/popup
 
@@ -43,8 +44,16 @@ jobs:
           )
           PY
 
-      - name: Commit automático si cambió images.json
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Actualizar lista de imágenes popup"
-          file_pattern: assets/popup/images.json
+      - name: Guardar cambios
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add assets/popup/images.json
+
+          if git diff --cached --quiet; then
+            echo "No hay cambios en images.json"
+          else
+            git commit -m "Actualizar lista de imágenes popup"
+            git push
+          fi
