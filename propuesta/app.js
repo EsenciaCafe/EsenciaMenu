@@ -1,3 +1,4 @@
+import {createOrderNotes} from './order-notes.js?v=1';
 import {temperatureIcons} from '../shared/temperature.js';
 import {frameStyle} from '../shared/photo-frame.js';
 'use strict';
@@ -27,6 +28,7 @@ const groupFor = sid => groups.find(g=>g.sections.includes(sid)) || groups[0];
 const getSection = id => sections.find(s=>s.id===id);
 const key = (s,i) => s.id+'|'+i.id;
 const findEntry = k => allEntries.find(p=>p.key===k);
+const orderNotes=createOrderNotes({t,field,findEntry});
 const extraSections = new Set(EXTRA_SECTIONS);
 function photo(url, alt, className='',frames={},slot='product') { const src=safeImageURL(url); return src ? `<span class="photo-frame ${className}" data-photo-slot="${slot}" style="${frameStyle(frames,slot)}"><img class="menu-photo" src="${esc(src)}" alt="${esc(alt)}" loading="lazy" decoding="async"></span>` : ''; }
 function groupArt(g) { return `<div class="group-art" style="--tone:${g.tone}">${art(g.art)}${photo(g.image_url,bi(g.name),'',g.image_frame,'group')}</div>`; }
@@ -94,7 +96,7 @@ function openProduct(k){
   const p=findEntry(k);if(!p)return;
   const g=groupFor(p.s.id),extras=extraOptions(p);
   const image=p.i.image_url;
-  $('#product-content').innerHTML=`<div class="dialog-art ${image?'has-photo':''}" style="--tone:${g.tone}">${art(g.art)}${photo(image,field(p.i,'name'),'detail-photo',p.i.image_frame,'detail')}</div><div class="dialog-body"><p class="eyebrow">${esc(field(p.s,'title'))}</p><h2 id="product-title">${esc(field(p.i,'name'))}${temperatureIcons(p.i,en())}</h2>${p.i.serving_temperatures?.length?`<p class="reduced-info">${t('Disponible: ','Available: ')}${[p.i.serving_temperatures.includes('hot')?t('caliente','hot'):'',p.i.serving_temperatures.includes('cold')?t('frío','cold'):''].filter(Boolean).join(t(' y ',' and '))}</p>`:''}${field(p.i,'desc')?`<p class="dialog-description">${esc(field(p.i,'desc'))}</p>`:''}${field(p.s,'subtitle')?`<p class="reduced-info">${esc(field(p.s,'subtitle'))}</p>`:''}<div class="dialog-price">${esc(price(p.i))}<small>${t('IGIC incluido','IGIC tax included')}</small></div><div>${tags(p.i)}</div><button class="text-link" data-show-allergens>${t('Ver información de alérgenos ↓','View allergen information ↓')}</button>${field(p.s,'note')?`<p class="section-note">${esc(field(p.s,'note'))}</p>`:''}${extrasCatalogue(extras,p)}<div id="product-allergens">${allergenBox([p])}</div><p class="reduced-info">${t('Si tienes alguna alergia, consulta los ingredientes y la preparación con nuestro equipo antes de pedir.','If you have any allergies, ask our team about ingredients and preparation before ordering.')}</p></div>`;
+  $('#product-content').innerHTML=`<div class="dialog-art ${image?'has-photo':''}" style="--tone:${g.tone}">${art(g.art)}${photo(image,field(p.i,'name'),'detail-photo',p.i.image_frame,'detail')}</div><div class="dialog-body"><p class="eyebrow">${esc(field(p.s,'title'))}</p><h2 id="product-title">${esc(field(p.i,'name'))}${temperatureIcons(p.i,en())}</h2>${p.i.serving_temperatures?.length?`<p class="reduced-info">${t('Disponible: ','Available: ')}${[p.i.serving_temperatures.includes('hot')?t('caliente','hot'):'',p.i.serving_temperatures.includes('cold')?t('frío','cold'):''].filter(Boolean).join(t(' y ',' and '))}</p>`:''}${field(p.i,'desc')?`<p class="dialog-description">${esc(field(p.i,'desc'))}</p>`:''}${field(p.s,'subtitle')?`<p class="reduced-info">${esc(field(p.s,'subtitle'))}</p>`:''}<div class="dialog-price">${esc(price(p.i))}<small>${t('IGIC incluido','IGIC tax included')}</small></div><div class="order-add-row"><button class="primary" data-add-order="${esc(p.key)}">${t('Añadir a mi pedido','Add to my order')}</button><button class="text-link" data-open-order>${t('Ver mi pedido','View my order')}</button><p>${t('Una lista para enseñarnos al pedir. No se envía al equipo.','A list to show us when ordering. Not sent to our team.')}</p><span class="order-add-status" role="status"></span></div><div>${tags(p.i)}</div><button class="text-link" data-show-allergens>${t('Ver información de alérgenos ↓','View allergen information ↓')}</button>${field(p.s,'note')?`<p class="section-note">${esc(field(p.s,'note'))}</p>`:''}${extrasCatalogue(extras,p)}<div id="product-allergens">${allergenBox([p])}</div><p class="reduced-info">${t('Si tienes alguna alergia, consulta los ingredientes y la preparación con nuestro equipo antes de pedir.','If you have any allergies, ask our team about ingredients and preparation before ordering.')}</p></div>`;
   $('#product-dialog').showModal();
   $('#product-dialog').scrollTop=0;
 }
@@ -105,6 +107,8 @@ function openAllergens(){
 }
 function setLanguage(){
   document.documentElement.lang=lang;
+  orderNotes.refresh();
+  $('#order-hint').textContent=t('¿Sois varios? Guarda lo que vais a pedir en «Mi pedido».','A group visit? Keep your choices in “My order”.');
   $('#language').innerHTML=en()?'EN <span>/ ES</span>':'ES <span>/ EN</span>';
   $('#language').setAttribute('aria-label',en()?'Cambiar a español':'Switch to English');
   $('#proposal-bar').textContent=t('VISTA PREVIA · Alérgenos en revisión','PREVIEW · Allergens under review');
@@ -122,6 +126,8 @@ function setLanguage(){
 }
 function go(id){query='';$('#search').value='';subcategory='all';if(location.hash==='#'+id){render();window.scrollTo(0,0);}else location.hash=id;}
 document.addEventListener('click',e=>{
+  const add=e.target.closest('[data-add-order]');if(add){const p=findEntry(add.dataset.addOrder);if(p&&orderNotes.add(p)){add.disabled=true;add.textContent=t('Añadido','Added');$('.order-add-status').textContent=t('Ajusta cantidades, extras y notas en «Ver mi pedido».','Adjust quantities, extras and notes in “View my order”.');}return;}
+  if(e.target.closest('[data-open-order]')){$('#product-dialog').close();orderNotes.open();return;}
   if(e.target.closest('[data-retry]')){start();return;}
   if(e.target.closest('[data-show-allergens]')){$('#product-allergens').scrollIntoView({block:'start'});return;}
   const product=e.target.closest('[data-product]');if(product){openProduct(product.dataset.product);return;}

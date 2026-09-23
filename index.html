@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#f8f5ef">
   <title>Esencia · Un momento para ti</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23652e3b'/%3E%3Ctext x='12' y='30' fill='%23fff6e8' font-family='Georgia' font-size='32'%3Ee%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="propuesta/styles.css?v=20260923-final3">
-  <script src="propuesta/data.js?v=20260923-final3" defer></script>
-  <script type="module" src="propuesta/app.js?v=20260923-final3"></script>
+  <link rel="stylesheet" href="propuesta/styles.css?v=20260923-order1">
+  <script src="propuesta/data.js?v=20260923-order1" defer></script>
+  <script type="module" src="propuesta/app.js?v=20260923-order1"></script>
   <link rel="stylesheet" href="shared/photo-frame.css?v=20260923-hero2">
 <link rel="stylesheet" href="shared/temperature.css?v=1">
 </head>
@@ -87,10 +87,11 @@
   </header>
   <div class="toolbar"><div class="wrap toolbar-inner">
     <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/></svg><input id="search" type="search" placeholder="¿Qué te apetece? Café, aguacate, matcha…" aria-label="Buscar en toda la carta" autocomplete="off"></label>
-    <button class="allergen-button" id="allergen-button" hidden><span aria-hidden="true">ⓘ</span> <span id="allergen-button-label">Mis alérgenos</span><span class="filter-count" id="filter-count" hidden></span></button>
+    <button class="order-open" id="order-open">Mi pedido</button><button class="allergen-button" id="allergen-button" hidden><span aria-hidden="true">ⓘ</span> <span id="allergen-button-label">Mis alérgenos</span><span class="filter-count" id="filter-count" hidden></span></button>
   </div></div>
-  <main id="content" class="wrap" tabindex="-1"></main>
+  <p class="wrap order-hint" id="order-hint">¿Sois varios? Guarda lo que vais a pedir en «Mi pedido».</p><main id="content" class="wrap" tabindex="-1"></main>
   <footer class="wrap footer"><span class="brand-logo footer-logo"><img src="logo_letras.png" alt="Esencia"></span><span id="footer-note">Precios con IGIC incluido · Si tienes alguna alergia, habla con nuestro equipo.</span><a href="#inicio" id="footer-home">Volver al inicio ↑</a></footer>
+  <dialog id="order-dialog" aria-labelledby="order-title"><button class="close" data-close="order-dialog" aria-label="Cerrar">×</button><div id="order-content"></div></dialog>
   <dialog id="product-dialog" aria-labelledby="product-title"><button class="close" data-close="product-dialog" aria-label="Cerrar">×</button><div id="product-content"></div></dialog>
   <dialog id="allergen-dialog" aria-labelledby="allergen-title"><button class="close" data-close="allergen-dialog" aria-label="Cerrar">×</button><div id="allergen-content"></div></dialog>
   <dialog id="promo-dialog" aria-labelledby="promo-title"><button class="close" data-close="promo-dialog" aria-label="Cerrar">×</button><h2 id="promo-title">Café del mes</h2><a id="promo-link" target="_blank" rel="noopener noreferrer"><img id="promo-image" alt="Café del mes"></a><button id="promo-view-menu" class="primary" data-close="promo-dialog">Ver carta</button></dialog>
