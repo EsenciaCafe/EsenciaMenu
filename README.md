@@ -2,7 +2,7 @@
 
 ## Carta visual y editor actualizado
 
-La carta principal está en [`index.html`](index.html) y se edita desde [`admin/`](admin/index.html). Incluye fotos de categorías y artículos, el logo real, el popup existente y extras sin selección ni total. La información provisional de alérgenos permanece desactivada para clientes hasta su validación; se muestra una invitación a consultar al equipo. La ruta /propuesta/ redirige a la carta principal. Consulta [la guía de edición](propuesta/PROPUESTA.md).
+La carta principal está en [`index.html`](index.html) y se edita desde [`admin/`](admin/index.html). Incluye fotos de categorías y artículos, el logo real, el popup existente y extras sin selección ni total. Se muestran los alérgenos registrados de productos y extras, sin notas internas. Cuando faltan datos se invita a consultar al equipo; los datos de Firebase tienen prioridad sobre la base inicial. La ruta /propuesta/ redirige a la carta principal. Consulta [la guía de edición](propuesta/PROPUESTA.md).
 
 Para probar en local, sirve esta carpeta con `python -m http.server 4173 --bind 127.0.0.1` y abre `http://127.0.0.1:4173/`. El editor usa la cuenta y los datos actuales de Firebase. La versión anterior queda conservada en el historial de Git.
 

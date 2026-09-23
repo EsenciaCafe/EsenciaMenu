@@ -16,3 +16,5 @@ dialog{border:1px solid var(--line);background:var(--paper);color:var(--ink);bor
 @media(max-width:560px){.brand-logo{width:138px}.footer-logo{width:85px}.header-right{gap:12px}.promo-open{font-size:10px}.header{gap:12px}.group-art{width:102px;height:102px;border-radius:20px}.group-art svg{width:100%;height:100%}.product-photo{width:calc(100% + 26px);height:125px;margin:-16px -13px 15px}.dialog-art.has-photo{height:230px}.extra-info{padding:12px}.extra-heading{flex-wrap:wrap}.extra-heading h4{font-size:13px}.extra-photo{width:calc(100% + 24px);margin:-12px -12px 12px}.extra-allergens .allergen-box{padding:10px}.hero-art>.hero-photo{top:0;left:0;width:100%}.header-right .lang{padding:9px 10px}}
 
 [hidden]{display:none!important}
+
+.category h3{margin-right:0;max-width:none}.category p{padding-right:0}
