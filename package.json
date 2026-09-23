@@ -1,0 +1,6 @@
+{
+  "name": "esencia-menu",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node --test tests/menu-model.test.mjs"}
+}

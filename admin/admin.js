@@ -1,3 +1,4 @@
+import {normaliseFrames} from '../shared/photo-frame.js';
 // admin/admin.js
 // Editor CRUD con formularios, soporte ES/EN, order, toppings,
 // renombrado de categorías (settings/menu.nav_labels),
@@ -5,6 +6,8 @@
 // sin undefined en creates y con deleteField() en edits.
 
 import { db } from "../firebase.js";
+import {alphabeticalToppings, DEFAULT_CATEGORIES, categoryForSection, visualCategories, safeImageURL, escapeHTML} from '../shared/menu-model.js';
+import {mountImageField} from './image-field.js';
 import {
   doc, setDoc, updateDoc, deleteDoc, getDoc, deleteField,
   collection, getDocs, addDoc, serverTimestamp
@@ -24,105 +27,48 @@ const slug = (s="") =>
 /* ======= Modal/Form genérico ======= */
 function openForm({ title="Editar", submitLabel="Guardar", initial={}, fields=[] }){
   return new Promise(resolve=>{
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay";
-    overlay.innerHTML = `
-      <div class="modal">
-        <div class="modal-head">
-          <h3>${title}</h3>
-          <button class="btn-ghost" id="form-close" aria-label="Cerrar">✕</button>
-        </div>
-        <form class="modal-body" id="form-body"></form>
-        <div class="modal-actions">
-          <button type="button" class="btn" id="form-cancel">Cancelar</button>
-          <button type="submit" class="btn accent" id="form-submit">${submitLabel}</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    const form = overlay.querySelector("#form-body");
-
-    fields.forEach(f=>{
-      const row = document.createElement("div");
-      row.className = "form-row";
-      const id = `fld-${f.name}`;
-      let control = "";
-      if (f.type === "select"){
-        control = `<select id="${id}" name="${f.name}">${(f.options||[]).map(o=>`
-          <option value="${o.value}">${o.label}</option>`).join("")}</select>`;
-      } else if (f.type === "textarea"){
-        control = `<textarea id="${id}" name="${f.name}" rows="${f.rows||3}" placeholder="${f.placeholder||""}"></textarea>`;
-      } else if (f.type === "checkbox"){
-        control = `<label class="chk"><input type="checkbox" id="${id}" name="${f.name}"><span>${f.help||""}</span></label>`;
-      } else {
-        control = `<input id="${id}" name="${f.name}" type="${f.type||"text"}" placeholder="${f.placeholder||""}">`;
+    const dialog=document.createElement('dialog');dialog.className='editor-dialog';
+    dialog.innerHTML=`<div class="modal"><div class="modal-head"><h3 id="editor-form-title">${escapeHTML(title)}</h3><button type="button" class="btn-ghost" data-cancel aria-label="Cerrar">✕</button></div><form class="modal-body" id="editor-form"></form><div class="modal-actions"><button type="button" class="btn" data-cancel>Cancelar</button><button type="submit" form="editor-form" class="btn accent" id="form-submit">${escapeHTML(submitLabel)}</button></div></div>`;
+    dialog.setAttribute('aria-labelledby','editor-form-title');document.body.appendChild(dialog);
+    const form=dialog.querySelector('form'), submit=dialog.querySelector('#form-submit');
+    let busy=0,settled=false;
+    const finish=data=>{if(settled)return;settled=true;dialog.close();dialog.remove();resolve(data);};
+    for(const f of fields){
+      const row=document.createElement('div');row.className='form-row';form.appendChild(row);
+      const id=`fld-${f.name}`;
+      if(f.type==='image'){
+        mountImageField(row,f,initial[f.name]||'',delta=>{busy+=delta;submit.disabled=busy>0;},initial[f.frameName||'image_frame']||{});
+      }else{
+        let control='';
+        if(f.type==='select') control=`<select id="${id}" name="${f.name}">${(f.options||[]).map(o=>`<option value="${escapeHTML(o.value)}">${escapeHTML(o.label)}</option>`).join('')}</select>`;
+        else if(f.type==='textarea') control=`<textarea id="${id}" name="${f.name}" rows="${f.rows||3}"></textarea>`;
+        else if(f.type==='checkbox') control=`<label class="chk"><input type="checkbox" id="${id}" name="${f.name}"><span>${escapeHTML(f.help||'')}</span></label>`;
+        else control=`<input id="${id}" name="${f.name}" type="${f.type||'text'}" ${f.type==='number'?'step="any"':''}>`;
+        row.innerHTML=`${f.type==='checkbox'?'':`<label for="${id}">${escapeHTML(f.label||f.name)}</label>`}${control}${f.note?`<div class="note-inline">${escapeHTML(f.note)}</div>`:''}`;
+        const el=row.querySelector('#'+id),val=initial[f.name];
+        if(f.type==='checkbox')el.checked=!!val;else if(val!=null)el.value=String(val);
+        if(f.placeholder)el.placeholder=f.placeholder;
+        if(f.required||['name','title'].includes(f.name))el.required=true;
       }
-      row.innerHTML = `
-        ${f.type==="checkbox" ? "" : `<label for="${id}">${f.label||f.name}</label>`}
-        ${control}
-        ${f.note ? `<div class="note-inline">${f.note}</div>`:""}
-      `;
-      form.appendChild(row);
-
-      const el = row.querySelector("#"+id);
-      const val = initial[f.name];
-      if (f.type === "checkbox"){ el.checked = !!val; }
-      else if (val!=null){ el.value = String(val); }
-
-      if (f.dependsOn){
-        const dep = f.dependsOn;
-        const depEl = overlay.querySelector(`[name="${dep.name}"]`);
-        const toggle = ()=>{
-          const ok = dep.when( depEl.type==="checkbox" ? depEl.checked : depEl.value );
-          row.style.display = ok ? "" : "none";
-        };
-        depEl.addEventListener("input", toggle);
-        depEl.addEventListener("change", toggle);
-        toggle();
-      }
+      if(f.dependsOn){const dep=form.querySelector(`[name="${f.dependsOn.name}"]`);const toggle=()=>{const active=f.dependsOn.when(dep.type==='checkbox'?dep.checked:dep.value);row.hidden=!active;};dep.addEventListener('change',toggle);toggle();}
+    }
+    dialog.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=()=>finish(null));
+    dialog.addEventListener('cancel',e=>{e.preventDefault();finish(null);});
+    form.addEventListener('submit',e=>{
+      e.preventDefault();if(busy||!form.reportValidity())return;
+      const data={};
+      for(const f of fields){const el=form.elements.namedItem(f.name);if(!el)continue;data[f.name]=f.type==='checkbox'?el.checked:f.type==='number'&&el.value.trim()!==''?Number(el.value):el.value.trim();}
+      for(const f of fields.filter(f=>f.type==='image')){const frameName=f.frameName||'image_frame';try{data[frameName]=normaliseFrames(JSON.parse(form.elements.namedItem(frameName).value));}catch{data[frameName]={};}}
+      finish(data);
     });
-
-    const close = ()=> overlay.remove();
-    overlay.querySelector("#form-close").onclick  = ()=>{ close(); resolve(null); };
-    overlay.querySelector("#form-cancel").onclick = ()=>{ close(); resolve(null); };
-    overlay.addEventListener("click", e=>{ if (e.target === overlay){ close(); resolve(null); } });
-
-    overlay.querySelector("#form-submit").onclick = (e)=>{
-      e.preventDefault();
-      const data = {};
-      fields.forEach(f=>{
-        const el = overlay.querySelector(`[name="${f.name}"]`);
-        if (!el) return;
-        if (f.type==="checkbox"){ data[f.name] = !!el.checked; }
-        else {
-          const v = el.value.trim();
-          if (f.type==="number"){
-            const num = Number(v);
-            data[f.name] = isNaN(num) ? (v===""? "" : v) : num;
-          } else { data[f.name] = v; }
-        }
-      });
-      resolve(data); close();
-    };
+    dialog.showModal();
   });
 }
 
 /* ======= Constantes ======= */
-const GROUPS = [
-  { id:"poffertjes", label:"Poffertjes" },
-  { id:"cafe",       label:"Café" },
-  { id:"desayunos",  label:"Desayunos" },
-  { id:"bebidas",    label:"Bebidas" },
-];
-
-const groupToId = (g) => {
-  const s = slug(g||"");
-  if (/^poff/.test(s)) return "poffertjes";
-  if (/^cafe/.test(s) || /^caf/.test(s)) return "cafe";
-  if (/^desayun/.test(s)) return "desayunos";
-  if (/^bebid/.test(s)) return "bebidas";
-  return s || "otros";
-};
+let GROUPS = DEFAULT_CATEGORIES.map(g=>({id:g.id,label:g.name[0]})).concat({id:'extras',label:'Extras'});
+const categoryField = () => ({name:'visual_category',label:'Categoría en la nueva carta',type:'select',options:DEFAULT_CATEGORIES.map(g=>({value:g.id,label:GROUPS.find(x=>x.id===g.id)?.label||g.name[0]}))});
+const imageField = {name:'image_url',label:'Foto del artículo',type:'image'};
 
 /* ======= Auth ======= */
 const auth = getAuth();
@@ -143,18 +89,21 @@ onAuthStateChanged(auth, (user)=>{
     initEditor();
   } else {
     $("#auth-status").textContent = "No autenticado";
+    $("#visual-panel").hidden=true;
+    if($("#admin-actions"))$("#admin-actions").hidden=true;
+    $("#nav").innerHTML="";
     $("#editor").classList.add("hide");
     $("#login").classList.remove("hide");
   }
 });
 
 /* ======= Estado ======= */
-let STATE = { sections: [], byGroup: {}, activeTab: "poffertjes" };
+let STATE = { sections: [], byGroup: {}, activeTab: "desayunos", meta:{}, query:"", section:"", availability:"all" };
 
 function groupSections(sections){
   const map = {};
   for (const sec of sections){
-    const gid = groupToId(sec.group || sec.title || sec.id);
+    const gid = categoryForSection(sec);
     (map[gid] ||= []).push(sec);
   }
   return map;
@@ -167,8 +116,8 @@ async function loadSections(){
     const data = d.data();
     const id = d.id;
     const [itemsSnap, toppingsSnap] = await Promise.all([
-      getDocs(collection(db, "sections", id, "items")).catch(()=>({docs:[]})),
-      getDocs(collection(db, "sections", id, "toppings")).catch(()=>({docs:[]})),
+      getDocs(collection(db, "sections", id, "items")),
+      getDocs(collection(db, "sections", id, "toppings")),
     ]);
     const items = itemsSnap.docs.map(x=>({ id: x.id, ...x.data() }));
     const toppings = toppingsSnap.docs.map(x=>({ id: x.id, ...x.data() }));
@@ -182,7 +131,7 @@ function buildNav(){
   const nav = $("#nav");
   nav.innerHTML = GROUPS.map((g)=>`
     <a href="#${g.id}" class="${STATE.activeTab===g.id?"active":""}" data-tab="${g.id}">
-      ${g.label}
+      ${escapeHTML(g.label)}
     </a>
   `).join("");
 
@@ -190,7 +139,7 @@ function buildNav(){
     a.addEventListener("click", e=>{
       e.preventDefault();
       const tab = a.dataset.tab;
-      STATE.activeTab = tab;
+      STATE.activeTab = tab; STATE.section=""; STATE.query=""; $("#editor-search").value="";
       $$("#nav a").forEach(x=>x.classList.remove("active"));
       a.classList.add("active");
       render();
@@ -206,53 +155,43 @@ function buildNav(){
   }
   actions.innerHTML = `
     <button class="btn accent" id="btn-add-section">+ Sección</button>
-    <button class="btn" id="btn-edit-cats">Editar nombres de categorías</button>
+    <button class="btn" id="btn-edit-cats">Fotos y categorías</button>
+    <a class="btn" href="../" target="_blank" rel="noopener">Ver carta ↗</a>
+    <a class="btn" href="../promo-manager.html" target="_blank" rel="noopener">Café del mes / popup ↗</a>
   `;
+  actions.hidden=false;
   $("#btn-add-section").onclick = onAddSection;
   $("#btn-edit-cats").onclick = onEditCategoryNames;
 }
 
 /* ======= Form: Editar nombres de categorías ======= */
-async function onEditCategoryNames(){
-  try{
-    const ref = doc(collection(db, "settings"), "menu");
-    const snap = await getDoc(ref);
-    const current = snap.exists() ? (snap.data().nav_labels || {}) : {};
-    const initial = {
-      poff_es: current.poffertjes?.es ?? "Poffertjes",
-      poff_en: current.poffertjes?.en ?? "Mini Pancakes",
-      cafe_es: current.cafe?.es ?? "Café",
-      cafe_en: current.cafe?.en ?? "Coffee",
-      des_es:  current.desayunos?.es ?? "Desayunos",
-      des_en:  current.desayunos?.en ?? "Breakfast",
-      beb_es:  current.bebidas?.es ?? "Bebidas",
-      beb_en:  current.bebidas?.en ?? "Drinks",
-    };
-    const data = await openForm({
-      title: "Editar nombres de categorías",
-      submitLabel: "Guardar",
-      initial,
-      fields: [
-        { name:"poff_es", label:"Poffertjes (ES)" },
-        { name:"poff_en", label:"Poffertjes (EN)" },
-        { name:"cafe_es", label:"Café (ES)" },
-        { name:"cafe_en", label:"Café (EN)" },
-        { name:"des_es",  label:"Desayunos (ES)" },
-        { name:"des_en",  label:"Desayunos (EN)" },
-        { name:"beb_es",  label:"Bebidas (ES)" },
-        { name:"beb_en",  label:"Bebidas (EN)" },
-      ]
-    });
-    if (!data) return;
-    const nav_labels = {
-      poffertjes: { es: data.poff_es.trim(), en: data.poff_en.trim() },
-      cafe:       { es: data.cafe_es.trim(), en: data.cafe_en.trim() },
-      desayunos:  { es: data.des_es.trim(),  en: data.des_en.trim() },
-      bebidas:    { es: data.beb_es.trim(),  en: data.beb_en.trim() },
-    };
-    await setDoc(ref, { nav_labels }, { merge: true });
-    alert("Nombres de categorías actualizados."); await reload();
-  }catch(e){ console.error(e); alert("No se pudieron actualizar las categorías."); }
+function onEditCategoryNames(){
+  const panel=$('#visual-panel');panel.hidden=!panel.hidden;
+  if(!panel.hidden){renderVisualSettings();panel.scrollIntoView({block:'start'});}
+}
+function renderVisualSettings(){
+  const panel=$('#visual-panel');
+  const categories=visualCategories(STATE.meta,STATE.sections);
+  panel.innerHTML=`<h2>Fotos y categorías de la nueva carta</h2><p class="visual-intro">Sube tus fotos o pega su URL. Las fotos aparecerán en la portada y en las fichas. Puedes cambiar los nombres y descripciones en ambos idiomas.</p><div class="row-actions"><button class="btn" id="edit-hero">Cambiar foto de portada</button><button class="btn" id="hide-visual">Cerrar este panel</button></div><div class="category-settings">${categories.map(g=>`<article class="category-setting">${g.image_url?`<img src="${escapeHTML(g.image_url)}" alt="${escapeHTML(g.name[0])}">`:`<div class="category-placeholder" style="--category-tone:${g.tone}">Todavía sin foto</div>`}<div class="category-setting-body"><h3>${escapeHTML(g.name[0])}</h3><p>${escapeHTML(g.desc[0])}</p><button class="btn" data-edit-category="${g.id}">Editar ${escapeHTML(g.name[0])}</button></div></article>`).join('')}</div>`;
+  panel.querySelectorAll('[data-edit-category]').forEach(b=>b.onclick=()=>editCategory(categories.find(g=>g.id===b.dataset.editCategory)));
+  $('#hide-visual').onclick=()=>{panel.hidden=true;};
+  $('#edit-hero').onclick=editHero;
+}
+async function editCategory(g){
+  const current=STATE.meta.visual_categories?.[g.id]||{};
+  const data=await openForm({title:`Categoría: ${g.name[0]}`,initial:{name_es:g.name[0],name_en:g.name[1],desc_es:g.desc[0],desc_en:g.desc[1],image_url:current.image_url||'',image_frame:current.image_frame||{}},fields:[
+    {name:'name_es',label:'Nombre (ES)',required:true},{name:'name_en',label:'Name (EN)'},
+    {name:'desc_es',label:'Descripción (ES)'},{name:'desc_en',label:'Description (EN)'},
+    {name:'image_url',label:'Foto de la categoría',type:'image',slots:['category','group']}]});
+  if(!data)return;
+  try{const ref=doc(db,'settings','menu');if(STATE.settingsExists)await updateDoc(ref,{['visual_categories.'+g.id]:data});else await setDoc(ref,{visual_categories:{[g.id]:data}});await reload();$('#editor-status').textContent='Categoría guardada. Abre la nueva carta para verla.';}
+  catch(e){console.error(e);alert('No se pudo guardar la categoría. Comprueba tu sesión y la conexión.');}
+}
+async function editHero(){
+  const data=await openForm({title:'Foto de portada',initial:{image_url:STATE.meta.visual_hero_image||'',image_frame:STATE.meta.visual_hero_frame||{}},fields:[{name:'image_url',label:'Foto principal',type:'image',slots:['hero']}]});
+  if(!data)return;
+  try{const ref=doc(db,'settings','menu'),patch={visual_hero_image:data.image_url,visual_hero_frame:data.image_frame};if(STATE.settingsExists)await updateDoc(ref,patch);else await setDoc(ref,patch);await reload();$('#editor-status').textContent='Foto de portada guardada.';}
+  catch(e){console.error(e);alert('No se pudo guardar la foto de portada.');}
 }
 
 /* ======= Render ======= */
@@ -261,7 +200,15 @@ function render(){
   const tab = STATE.activeTab;
   $("#group-title").textContent = `Editor — ${GROUPS.find(g=>g.id===tab)?.label||tab}`;
 
-  let sections = STATE.byGroup[tab] || [];
+  const normal=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const q=normal(STATE.query).trim();
+  let sections = q ? STATE.sections : STATE.byGroup[tab] || [];
+  const selector=$('#section-filter');
+  selector.innerHTML='<option value="">Todas las secciones</option>'+sections.map(s=>`<option value="${escapeHTML(s.id)}">${escapeHTML(s.title)}</option>`).join('');
+  selector.value=STATE.section;
+  if(STATE.section)sections=sections.filter(s=>s.id===STATE.section);
+  const matches=(i,sec)=> (!q||normal([i.name,i.name_en,i.desc,sec.title].join(' ')).includes(q)) && (STATE.availability==='all'||(STATE.availability==='hidden')===!!(i.hidden||sec.hidden));
+  sections=sections.map(sec=>({...sec,items:sec.items.filter(i=>matches(i,sec)),toppings:sec.toppings.filter(i=>matches(i,sec))})).filter(sec=> !q&&STATE.availability==='all'||sec.items.length||sec.toppings.length||sec.base&&matches({name:sec.base.description},sec));
   sections = sections.slice().sort((a,b)=>{
     const ao = typeof a.order==="number" ? a.order : 9999;
     const bo = typeof b.order==="number" ? b.order : 9999;
@@ -269,9 +216,10 @@ function render(){
     return (a.title||"").localeCompare(b.title||"", "es");
   });
 
-  wrap.innerHTML = sections.map(sec => sectionCard(sec)).join("") || `<div class="note">No hay secciones en esta categoría.</div>`;
+  wrap.innerHTML = sections.map(sec => sectionCard(sec)).join("") || `<div class="note">No hay resultados. Prueba otra búsqueda o cambia los filtros.</div>`;
 
-  sections.forEach(sec=>{
+  sections.forEach(visible=>{
+    const sec=STATE.sections.find(s=>s.id===visible.id);
     $("#toggle-sec-"+sec.id)?.addEventListener("click", ()=> onToggleSectionHidden(sec));
     $("#edit-sec-"+sec.id)?.addEventListener("click", ()=> onEditSection(sec));
     $("#del-sec-"+sec.id)?.addEventListener("click", ()=> onDeleteSection(sec));
@@ -305,87 +253,30 @@ function sectionCard(sec){
   });
 
   const toppingsSorted = (sec.toppings||[]).slice().sort((a,b)=>{
+    if(sec.id==='mini-pancakes')return alphabeticalToppings(a,b);
     const ao = typeof a.order==="number" ? a.order : 9999;
     const bo = typeof b.order==="number" ? b.order : 9999;
     if (ao!==bo) return ao-bo;
     return (a.name||a.name_en||"").localeCompare(b.name||b.name_en||"", "es");
   });
 
-  return `
-    <div class="section" id="${slug(sec.title||sec.id)}">
-      <div class="card ${sec.hidden ? 'muted-out' : ''}">
-        <div class="title">
-          <span>${sec.title || ""}</span>
-          <span class="right">
-            ${sec.hidden ? `<span class="badge-soft">OCULTA</span>` : ""}
-            order: ${typeof sec.order==="number" ? sec.order : "-"}
-          </span>
-        </div>
-        ${sec.subtitle ? `<div class="muted">${sec.subtitle}</div>` : ""}
-        ${sec.note ? `<div class="note" style="margin:10px 0">${sec.note}</div>` : ""}
-        ${hasBase ? `
-          <div class="fieldset">
-            <div class="kvs"><label>Base</label><div class="muted-small">
-              ${sec.base.title ? `<strong>${sec.base.title}</strong>` : ""} ${sec.base.description? `— ${sec.base.description}`:""} ${sec.base.price? `— ${sec.base.price}`:""}
-              ${ (sec.base.title_en || sec.base.description_en) ? `<div class="muted-small">EN: ${sec.base.title_en||""} ${sec.base.description_en?`— ${sec.base.description_en}`:""}</div>` : "" }
-            </div></div>
-          </div>` : ""
-        }
-
-        <div class="row-actions" style="margin-top:10px">
-          <button class="btn" id="toggle-sec-${sec.id}">${sec.hidden ? "👁 Mostrar" : "🚫 Ocultar"}</button>
-          <button class="btn accent" id="edit-sec-${sec.id}">✏ Editar sección</button>
-          <button class="btn" id="order-sec-${sec.id}">↕ Orden</button>
-          <button class="btn danger" id="del-sec-${sec.id}">🗑 Eliminar</button>
-        </div>
-
-        ${itemsSorted.length ? `<h3 style="margin:14px 0 6px">Items</h3>`:""}
-        ${itemsSorted.length ? `
-          <div class="grid">
-            ${itemsSorted.map(it=>`
-              <div class="card ${it.hidden?'muted-out':''}">
-                <div class="title">
-                  <span>${it.name||""} ${it.hidden?'<span class="badge-soft">OCULTO</span>':''}</span>
-                  <span class="right">${it.price||""}</span>
-                </div>
-                ${it.desc? `<div class="muted">${it.desc}</div>`:""}
-                ${ (it.name_en || it.desc_en) ? `<div class="muted-small">EN: ${it.name_en||""} ${it.desc_en?`— ${it.desc_en}`:""}</div>`:"" }
-                <div class="row-actions" style="margin-top:8px">
-                  <button class="btn" id="toggle-item-${sec.id}-${it.id}">${it.hidden ? "👁 Mostrar" : "🚫 Ocultar"}</button>
-                  <button class="btn" id="edit-item-${sec.id}-${it.id}">✏ Editar</button>
-                  <button class="btn" id="order-item-${sec.id}-${it.id}">↕ Orden</button>
-                  <button class="btn danger" id="del-item-${sec.id}-${it.id}">🗑 Eliminar</button>
-                </div>
-              </div>
-            `).join("")}
-          </div>
-        `:""}
-
-        <div class="row-actions" style="margin-top:10px">
-          <button class="btn accent" id="add-item-${sec.id}">+ Item</button>
-          ${sec.toppings ? `<button class="btn" id="add-top-${sec.id}">+ Topping</button>` : ""}
-        </div>
-
-        ${toppingsSorted.length ? `<h3 style="margin:14px 0 6px">Toppings</h3>`:""}
-        ${toppingsSorted.length ? `
-          <div class="toppings">
-            ${toppingsSorted.map(tp=>`
-              <span class="badge ${tp.hidden?'muted-out':''}">
-                ${tp.name}${tp.price?` — ${tp.price}`:""}
-                ${ tp.name_en ? `<span class="muted-small" style="margin-left:6px">EN: ${tp.name_en}</span>` : "" }
-                <span style="margin-left:6px">
-                  <a href="#" id="toggle-top-${sec.id}-${tp.id}" title="${tp.hidden?'Mostrar':'Ocultar'}">${tp.hidden?'👁':'🚫'}</a>
-                  <a href="#" id="edit-top-${sec.id}-${tp.id}" title="Editar">✏</a>
-                  <a href="#" id="order-top-${sec.id}-${tp.id}" title="Orden">↕</a>
-                  <a href="#" id="del-top-${sec.id}-${tp.id}" title="Eliminar" style="color:#b91c1c">🗑</a>
-                </span>
-              </span>
-            `).join("")}
-          </div>
-        `:""}
-      </div>
-    </div>
-  `;
+  const entryCard=(it,kind)=>{
+    const prefix=kind==='top'?'top':'item',src=safeImageURL(it.image_url);
+    const price=it.free?'Gratis':it.price===undefined||it.price===''?'Sin precio':escapeHTML(String(it.price))+' €';
+    return `<article class="catalog-card ${it.hidden||sec.hidden?'is-unavailable':''}">
+      <div class="catalog-photo">${src?`<img src="${escapeHTML(src)}" alt="${escapeHTML(it.name)}" loading="lazy">`:'<span>Sin foto</span>'}<span class="availability-pill">${sec.hidden?'Sección oculta':it.hidden?'No disponible':'Disponible'}</span></div>
+      <div class="catalog-body"><div class="catalog-heading"><h3>${escapeHTML(it.name||it.name_en||'Sin nombre')}</h3><strong>${price}</strong></div>${it.desc?`<p class="catalog-description">${escapeHTML(it.desc)}</p>`:''}
+      <div class="catalog-actions"><button class="btn accent" id="edit-${prefix}-${sec.id}-${it.id}">Editar</button><button class="btn" id="toggle-${prefix}-${sec.id}-${it.id}" aria-label="${it.hidden?'Activar':'Marcar no disponible'} ${escapeHTML(it.name)}">${it.hidden?'Activar':'No disponible'}</button>
+      <details class="catalog-more"><summary aria-label="Más opciones de ${escapeHTML(it.name)}">•••</summary><div>${kind==='top'&&sec.id==='mini-pancakes'?'':`<button class="btn" id="order-${prefix}-${sec.id}-${it.id}">Cambiar orden</button>`}<button class="btn danger" id="del-${prefix}-${sec.id}-${it.id}">Eliminar</button></div></details></div></div></article>`;
+  };
+  return `<section class="catalog-section" id="${slug(sec.title||sec.id)}">
+    <div class="catalog-section-head"><div><p class="catalog-eyebrow">${sec.hidden?'SECCIÓN OCULTA':'SECCIÓN'} · ${itemsSorted.length} artículos${toppingsSorted.length?' · '+toppingsSorted.length+' toppings':''}</p><h2>${escapeHTML(sec.title||'')}</h2></div>
+    <div class="row-actions"><button class="btn" id="edit-sec-${sec.id}">${hasBase?'Editar producto base':'Editar sección'}</button><details class="catalog-more"><summary>Opciones</summary><div><button class="btn" id="toggle-sec-${sec.id}">${sec.hidden?'Mostrar sección':'Ocultar sección'}</button><button class="btn" id="order-sec-${sec.id}">Cambiar orden</button><button class="btn danger" id="del-sec-${sec.id}">Eliminar sección</button></div></details></div></div>
+    ${hasBase?`<div class="base-overview">${safeImageURL(sec.base.image_url)?`<img src="${escapeHTML(safeImageURL(sec.base.image_url))}" alt="Producto base">`:''}<div><span class="catalog-eyebrow">PRODUCTO BASE</span><h3>${escapeHTML(sec.base.description||sec.base.title||sec.title)}</h3><strong>${escapeHTML(String(sec.base.price??''))} €</strong><p>Edita su foto, encuadre y precio en «Editar producto base».</p></div></div>`:''}
+    <div class="catalog-grid">${itemsSorted.map(i=>entryCard(i,'item')).join('')}</div>
+    <div class="row-actions"><button class="btn accent" id="add-item-${sec.id}">+ Artículo</button>${sec.toppings?`<button class="btn" id="add-top-${sec.id}">+ Topping</button>`:''}</div>
+    ${toppingsSorted.length?`<div class="catalog-section-head"><h3>Toppings</h3><span class="muted-small">${sec.id==='mini-pancakes'?'Orden alfabético automático':''}</span></div><div class="catalog-grid topping-grid">${toppingsSorted.map(i=>entryCard(i,'top')).join('')}</div>`:''}
+  </section>`;
 }
 
 /* ======= Toggle hidden ======= */
@@ -413,9 +304,10 @@ async function onAddSection(){
   const data = await openForm({
     title: "Nueva sección",
     submitLabel: "Crear",
-    initial: { group:"Desayunos", title:"", title_en:"", subtitle:"", subtitle_en:"", note:"", note_en:"", order:1, hidden:false, base_enable:false, base_title:"", base_title_en:"", base_desc:"", base_desc_en:"", base_price:"" },
+    initial: { visual_category:STATE.activeTab==="extras"?"desayunos":STATE.activeTab, group:"Desayunos", title:"", title_en:"", subtitle:"", subtitle_en:"", note:"", note_en:"", order:1, hidden:false, base_enable:false, base_title:"", base_title_en:"", base_desc:"", base_desc_en:"", base_price:"" },
     fields: [
-      { name:"group", label:"Grupo", type:"select", options:[
+      categoryField(),
+      { name:"group", label:"Grupo en carta anterior", type:"select", options:[
         {value:"Poffertjes", label:"Poffertjes"},
         {value:"Café", label:"Café"},
         {value:"Desayunos", label:"Desayunos"},
@@ -430,6 +322,9 @@ async function onAddSection(){
       { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
       { name:"hidden", type:"checkbox", help:"Ocultar esta sección" },
       { name:"base_enable", type:"checkbox", help:"Añadir BASE (título/desc/precio)" },
+      {name:"base_image_url",label:"Foto de la base",type:"image",frameName:"base_image_frame",slots:["featured","product","detail"],dependsOn:{name:"base_enable",when:v=>!!v}},
+      {name:"base_name",label:"Nombre de la base en la nueva carta (ES)",dependsOn:{name:"base_enable",when:v=>!!v}},
+      {name:"base_name_en",label:"Base name (EN)",dependsOn:{name:"base_enable",when:v=>!!v}},
       { name:"base_title", label:"Base · Título (ES)", dependsOn:{name:"base_enable", when:v=>!!v} },
       { name:"base_title_en", label:"Base · Title (EN)", placeholder:"Opcional", dependsOn:{name:"base_enable", when:v=>!!v} },
       { name:"base_desc", label:"Base · Descripción (ES)", type:"textarea", rows:2, dependsOn:{name:"base_enable", when:v=>!!v} },
@@ -443,6 +338,7 @@ async function onAddSection(){
   const payload = {
     title: data.title,
     group: data.group,
+    visual_category: data.visual_category,
     order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
     hidden: !!data.hidden,
     createdAt: serverTimestamp(), updatedAt: serverTimestamp()
@@ -455,6 +351,9 @@ async function onAddSection(){
 
   if (data.base_enable) {
     const base = {};
+    if(data.base_image_url){base.image_url=data.base_image_url;base.image_frame=data.base_image_frame;}
+    if(data.base_name)base.name=data.base_name;
+    if(data.base_name_en)base.name_en=data.base_name_en;
     if (data.base_title) base.title = data.base_title;
     if (data.base_title_en) base.title_en = data.base_title_en;
     if (data.base_desc) base.description = data.base_desc;
@@ -463,7 +362,7 @@ async function onAddSection(){
     if (Object.keys(base).length) payload.base = base;
   }
 
-  try{ await setDoc(doc(db, "sections", id), payload, { merge: true }); await reload(); }
+  try{ const ref=doc(db,"sections",id);if((await getDoc(ref)).exists()){alert("Ya existe una sección con ese nombre. Edita la sección existente o elige otro nombre.");return;}await setDoc(ref,payload);await reload(); }
   catch(e){ console.error(e); alert("No se pudo crear sección."); }
 }
 
@@ -472,6 +371,7 @@ async function onEditSection(sec){
     title: `Editar sección: ${sec.title}`,
     submitLabel: "Guardar",
     initial: {
+      visual_category:categoryForSection(sec),
       group: sec.group || "Desayunos",
       title: sec.title || "",
       title_en: sec.title_en || "",
@@ -481,7 +381,11 @@ async function onEditSection(sec){
       note_en: sec.note_en || "",
       order: typeof sec.order==="number"? sec.order : 1,
       hidden: !!sec.hidden,
-      base_enable: !!sec.base,
+      base_enable: sec.base?.price != null,
+      base_image_url: sec.base?.image_url || "",
+      base_image_frame: sec.base?.image_frame || {},
+      base_name:sec.base?.name || "",
+      base_name_en:sec.base?.name_en || "",
       base_title: sec.base?.title || "",
       base_title_en: sec.base?.title_en || "",
       base_desc: sec.base?.description || "",
@@ -489,7 +393,8 @@ async function onEditSection(sec){
       base_price: sec.base?.price || "",
     },
     fields: [
-      { name:"group", label:"Grupo", type:"select", options:[
+      categoryField(),
+      { name:"group", label:"Grupo en carta anterior", type:"select", options:[
         {value:"Poffertjes", label:"Poffertjes"},
         {value:"Café", label:"Café"},
         {value:"Desayunos", label:"Desayunos"},
@@ -504,6 +409,9 @@ async function onEditSection(sec){
       { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
       { name:"hidden", type:"checkbox", help:"Ocultar esta sección" },
       { name:"base_enable", type:"checkbox", help:"Editar BASE (título/desc/precio)" },
+      {name:"base_image_url",label:"Foto de la base",type:"image",frameName:"base_image_frame",slots:["featured","product","detail"],dependsOn:{name:"base_enable",when:v=>!!v}},
+      {name:"base_name",label:"Nombre de la base en la nueva carta (ES)",dependsOn:{name:"base_enable",when:v=>!!v}},
+      {name:"base_name_en",label:"Base name (EN)",dependsOn:{name:"base_enable",when:v=>!!v}},
       { name:"base_title", label:"Base · Título (ES)", dependsOn:{name:"base_enable", when:v=>!!v} },
       { name:"base_title_en", label:"Base · Title (EN)", placeholder:"Opcional", dependsOn:{name:"base_enable", when:v=>!!v} },
       { name:"base_desc", label:"Base · Descripción (ES)", type:"textarea", rows:2, dependsOn:{name:"base_enable", when:v=>!!v} },
@@ -521,6 +429,7 @@ async function onEditSection(sec){
     note: data.note ? data.note : deleteField(),
     note_en: data.note_en ? data.note_en : deleteField(),
     group: data.group,
+    visual_category: data.visual_category,
     order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
     hidden: !!data.hidden,
     updatedAt: serverTimestamp()
@@ -533,7 +442,11 @@ async function onEditSection(sec){
     base.description = data.base_desc ? data.base_desc : deleteField();
     base.description_en = data.base_desc_en ? data.base_desc_en : deleteField();
     base.price = data.base_price ? data.base_price : deleteField();
-    patch.base = base;
+    base.image_url=data.base_image_url || deleteField();
+    base.image_frame=data.base_image_url?data.base_image_frame:deleteField();
+    base.name=data.base_name || deleteField();base.name_en=data.base_name_en || deleteField();
+    if((data.base_desc||'')!==(sec.base?.description||'') || (data.base_name||'')!==(sec.base?.name||''))base.allergens_revision_required=true;
+    for(const [key,value] of Object.entries(base))patch['base.'+key]=value;
   } else {
     patch.base = deleteField();
   }
@@ -571,6 +484,7 @@ async function onAddItem(sec){
     submitLabel: "Crear",
     initial: { name:"", name_en:"", desc:"", desc_en:"", price:"", order:1, hidden:false },
     fields: [
+      imageField,
       { name:"name", label:"Nombre (ES)" },
       { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
       { name:"desc", label:"Descripción (ES)", type:"textarea", rows:2, placeholder:"Opcional" },
@@ -588,6 +502,7 @@ async function onAddItem(sec){
     hidden: !!data.hidden,
     createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
   };
+  if (data.image_url){payload.image_url=data.image_url;payload.image_frame=data.image_frame;}
   if (data.name_en) payload.name_en = data.name_en;
   if (data.desc) payload.desc = data.desc;
   if (data.desc_en) payload.desc_en = data.desc_en;
@@ -602,6 +517,8 @@ async function onEditItem(sec, it){
     title: `Editar item: ${it.name}`,
     submitLabel: "Guardar",
     initial: {
+      image_url:it.image_url || "",
+      image_frame:it.image_frame || {},
       name: it.name || "",
       name_en: it.name_en || "",
       desc: it.desc || "",
@@ -611,6 +528,7 @@ async function onEditItem(sec, it){
       hidden: !!it.hidden,
     },
     fields: [
+      imageField,
       { name:"name", label:"Nombre (ES)" },
       { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
       { name:"desc", label:"Descripción (ES)", type:"textarea", rows:2, placeholder:"Opcional" },
@@ -628,6 +546,8 @@ async function onEditItem(sec, it){
     hidden: !!data.hidden,
     updatedAt: serverTimestamp(),
   };
+  patch.image_url = data.image_url || deleteField();
+  patch.image_frame = data.image_url ? data.image_frame : deleteField();
   patch.name_en = data.name_en ? data.name_en : deleteField();
   patch.desc    = data.desc    ? data.desc    : deleteField();
   patch.desc_en = data.desc_en ? data.desc_en : deleteField();
@@ -663,24 +583,28 @@ async function onAddTopping(sec){
     submitLabel: "Crear",
     initial: { name:"", name_en:"", price:"", order:1, hidden:false },
     fields: [
+      imageField,
       { name:"name", label:"Nombre (ES)" },
       { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
       { name:"price", label:"Precio (opcional)", placeholder:"ej: 1.50" },
-      { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
-      { name:"hidden", type:"checkbox", help:"Ocultar este topping" },
+      ...(sec.id==='mini-pancakes'?[]:[{ name:"order", label:"Orden", type:"number", note:"Menor aparece primero" }]),
+      {name:"free",type:"checkbox",help:"Topping gratuito"},
+      { name:"hidden", type:"checkbox", help:"No disponible (ocultar en la carta)" },
     ]
   });
   if (!data) return;
 
   const payload = {
     name: data.name,
-    order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+    ...(sec.id==='mini-pancakes'?{}:{order: isNaN(Number(data.order)) ? 9999 : Number(data.order)}),
     hidden: !!data.hidden,
     createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
   };
+  if (data.image_url){payload.image_url=data.image_url;payload.image_frame=data.image_frame;}
   if (data.name_en) payload.name_en = data.name_en;
   if (data.price) payload.price = data.price;
 
+  payload.free=!!data.free;
   try{ await addDoc(collection(db, "sections", sec.id, "toppings"), payload); await reload(); }
   catch(e){ console.error(e); alert("No se pudo añadir el topping."); }
 }
@@ -689,26 +613,31 @@ async function onEditTopping(sec, tp){
   const data = await openForm({
     title: `Editar topping: ${tp.name}`,
     submitLabel: "Guardar",
-    initial: { name: tp.name || "", name_en: tp.name_en || "", price: tp.price || "", order: typeof tp.order==="number" ? tp.order : 1, hidden: !!tp.hidden },
+    initial: { image_url:tp.image_url || "", image_frame:tp.image_frame || {}, free:!!tp.free, name: tp.name || "", name_en: tp.name_en || "", price: tp.price || "", order: typeof tp.order==="number" ? tp.order : 1, hidden: !!tp.hidden },
     fields: [
+      imageField,
       { name:"name", label:"Nombre (ES)" },
       { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
       { name:"price", label:"Precio (opcional)" },
-      { name:"order", label:"Orden", type:"number", note:"Menor aparece primero" },
-      { name:"hidden", type:"checkbox", help:"Ocultar este topping" },
+      ...(sec.id==='mini-pancakes'?[]:[{ name:"order", label:"Orden", type:"number", note:"Menor aparece primero" }]),
+      {name:"free",type:"checkbox",help:"Topping gratuito"},
+      { name:"hidden", type:"checkbox", help:"No disponible (ocultar en la carta)" },
     ]
   });
   if (!data) return;
 
   const patch = {
     name: data.name,
-    order: isNaN(Number(data.order)) ? 9999 : Number(data.order),
+    ...(sec.id==='mini-pancakes'?{}:{order: isNaN(Number(data.order)) ? 9999 : Number(data.order)}),
     hidden: !!data.hidden,
     updatedAt: serverTimestamp(),
   };
+  patch.image_url = data.image_url || deleteField();
+  patch.image_frame = data.image_url ? data.image_frame : deleteField();
   patch.name_en = data.name_en ? data.name_en : deleteField();
   patch.price   = data.price   ? data.price   : deleteField();
 
+  patch.free=!!data.free;
   try{ await updateDoc(doc(db, "sections", sec.id, "toppings", tp.id), patch); await reload(); }
   catch(e){ console.error(e); alert("No se pudo editar el topping."); }
 }
@@ -733,18 +662,25 @@ async function onChangeToppingOrder(sec, tp){
 }
 
 /* ======= Init & Reload ======= */
-async function initEditor(){ buildNav(); await reload(); }
+async function initEditor(){ await reload(); }
 
 async function reload(){
   const app = $("#sections");
   app.innerHTML = `<div class="loading">Cargando secciones…</div>`;
   try{
-    const sections = await loadSections();
+    const [sections,settings]=await Promise.all([loadSections(),getDoc(doc(db,"settings","menu"))]);
+    STATE.settingsExists=settings.exists();
+    STATE.meta=settings.exists()?settings.data():{};
+    GROUPS=visualCategories(STATE.meta,sections).map(g=>({id:g.id,label:g.name[0]})).concat({id:"extras",label:"Extras"});
     STATE.sections = sections;
     STATE.byGroup = groupSections(sections);
-    render();
+    buildNav();renderVisualSettings();render();
   }catch(e){
     console.error(e);
     app.innerHTML = `<div class="note">Error cargando secciones. Revisa consola.</div>`;
   }
 }
+
+$('#editor-search').addEventListener('input',e=>{STATE.query=e.target.value;STATE.section='';render();});
+$('#section-filter').addEventListener('change',e=>{STATE.section=e.target.value;render();});
+$('#availability-filter').addEventListener('change',e=>{STATE.availability=e.target.value;render();});

@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#ffffff" />
   <meta name="description" content="Editor de la carta de Esencia (privado)" />
   <link rel="stylesheet" href="../styles.css" />
+  <link rel="stylesheet" href="visual-editor.css" />
   <style>
     /* Ajustes mínimos para UI del editor */
     .admin-bar{
@@ -32,12 +33,14 @@
     @media (max-width:720px){ .two{ grid-template-columns:1fr } }
     .section .title .right{ float:right; font-weight:600 }
   </style>
+  <link rel="stylesheet" href="../shared/photo-frame.css">
+  <link rel="stylesheet" href="catalog-editor.css?v=1">
 </head>
 <body>
   <header class="site-header">
     <div class="brand">
-      <span class="logo">Esencia — <span style="font-weight:600">Editor</span></span>
-      <span class="tag">Gestiona categorías, secciones, artículos y precios</span>
+      <span class="admin-logo"><img src="../logo_letras.png" alt="Esencia"></span><strong>Editor de carta</strong>
+      <span class="tag">Gestiona fotos, categorías, artículos y precios</span>
     </div>
     <nav id="nav" class="nav"></nav>
   </header>
@@ -45,11 +48,12 @@
   <div class="admin-bar">
     <div id="auth-status" class="muted-small">No autenticado</div>
     <div class="row-actions">
-      <button id="btn-add-section" class="btn accent">+ Sección</button>
+      <a class="btn" href="../" target="_blank" rel="noopener">Ver carta ↗</a>
       <button id="btn-logout" class="btn">Cerrar sesión</button>
     </div>
   </div>
 
+  <section id="visual-panel" class="visual-panel" hidden></section>
   <main id="app" class="container" aria-live="polite">
     <!-- Login form (se muestra si no hay sesión) -->
     <section id="login" class="section">
@@ -72,7 +76,10 @@
 
     <!-- Editor (se muestra si hay sesión) -->
     <section id="editor" class="section hide">
+      <p id="editor-status" class="editor-status" role="status"></p>
       <h2 id="group-title">Editor</h2>
+      <p class="workspace-intro">Elige una categoría o busca un producto. Gestiona sus fotos, precios y disponibilidad desde cada tarjeta.</p>
+      <div class="catalog-tools"><label>Buscar en toda la carta<input id="editor-search" type="search" placeholder="Nombre de artículo o topping…"></label><label>Sección<select id="section-filter"><option value="">Todas las secciones</option></select></label><label>Disponibilidad<select id="availability-filter"><option value="all">Todos</option><option value="available">Disponibles</option><option value="hidden">No disponibles</option></select></label></div>
       <div id="sections"></div>
     </section>
   </main>
@@ -87,6 +94,6 @@
     </div>
   </noscript>
 
-  <script type="module" src="./admin.js"></script>
+  <script type="module" src="./admin.js?v=catalog1"></script>
 </body>
 </html>

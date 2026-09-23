@@ -1,250 +1,98 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Esencia — Carta</title>
-  <link rel="stylesheet" href="styles.css" />
-  <style>
-    /* Layout header con chips arriba a la derecha */
-    .site-header{
-      display:flex; align-items:center; justify-content:space-between;
-      gap:12px; padding:12px 16px;
-    }
-    .brand{display:flex; align-items:center; gap:12px}
-    .logo-img{max-height:64px; height:auto; width:auto}
-
-    .lang-switch{display:flex; gap:8px; align-items:center}
-    .lang-chip{
-      width:32px; height:32px; border-radius:999px;
-      display:flex; align-items:center; justify-content:center;
-      font-size:18px; line-height:1;
-      border:1px solid var(--line, #e5e7eb); background:#fff;
-      box-shadow: 0 1px 2px rgba(0,0,0,.06);
-      cursor:pointer; transition:transform .1s, box-shadow .2s, border-color .2s;
-    }
-    .lang-chip:hover{ transform: translateY(-1px); }
-    .lang-chip.active{ border-color: var(--accent, #b08968); box-shadow: 0 0 0 2px rgba(176,137,104,.15); }
-
-    @media(max-width:480px){ .lang-chip{ width:28px; height:28px; font-size:16px; } }
-
-    /* Landing básica */
-    .landing{max-width:980px; margin:24px auto; padding:0 16px; text-align:left;}
-    .lang-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px;}
-    .lang-btn{
-      font-size:1.5rem; line-height:1;
-      border-radius:16px; border:1px solid var(--line, #e5e7eb);
-      background:#f7f7f8; padding:14px; cursor:pointer;
-    }
-    @media(max-width:640px){ .lang-grid{ grid-template-columns:1fr; } }
-
-    .hidden{display:none !important;}
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f5ef">
+  <title>Esencia · Un momento para ti</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23652e3b'/%3E%3Ctext x='12' y='30' fill='%23fff6e8' font-family='Georgia' font-size='32'%3Ee%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="propuesta/styles.css?v=20260923-final1">
+  <script src="propuesta/data.js?v=20260923-final1" defer></script>
+  <script type="module" src="propuesta/app.js?v=20260923-final1"></script>
+  <link rel="stylesheet" href="shared/photo-frame.css?v=20260923-hero2">
 </head>
-
 <body>
-
-  <!-- POPUP PROMO (SIEMPRE DENTRO DE BODY) -->
-  <div id="promo-modal" class="promoHidden" aria-hidden="true">
-    <div class="promoOverlay" data-promo-close></div>
-
-    <div class="promoCard" role="dialog" aria-modal="true" aria-labelledby="promo-title">
-      <button class="promoClose" aria-label="Cerrar" data-promo-close>✕</button>
-
-      <h2 id="promo-title" class="promoTitle"></h2>
-
-      <a id="promo-link" class="promoLink" href="#" target="_blank" rel="noopener">
-        <img id="promo-img" class="promoImg" src="" alt="" />
-      </a>
-
-      <div class="promoActions">
-        <button id="promo-skip" class="promoBtn promoBtnSecondary" data-promo-close>
-          Ver carta
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <header class="site-header">
-    <div class="brand">
-      <img src="logo_letras.png" alt="Esencia" class="logo-img" />
-      <span class="tag">Repostería casera — IGIC incluido</span>
-    </div>
-    <!-- chips pequeños arriba a la derecha -->
-    <div id="lang-switch" class="lang-switch hidden" role="group" aria-label="Language switch">
-      <button id="chip-es" class="lang-chip" aria-label="Español" title="Español">🇪🇸</button>
-      <button id="chip-en" class="lang-chip" aria-label="English" title="English">🇬🇧</button>
-    </div>
+  <svg class="svg-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="art-coffee" viewBox="0 0 240 180">
+      <ellipse cx="124" cy="154" rx="90" ry="15" fill="#382d2b" opacity=".09"/>
+      <ellipse cx="120" cy="145" rx="88" ry="17" fill="#e4ccc1" stroke="#773c42" stroke-width="2"/>
+      <path d="M177 65h13c43 0 28 59-12 51" fill="none" stroke="#773c42" stroke-width="16"/>
+      <path d="M177 65h13c43 0 28 59-12 51" fill="none" stroke="#efd8c7" stroke-width="10"/>
+      <path d="M55 58h123l-9 57q-4 33-51 33t-55-33z" fill="#fff5e4" stroke="#773c42" stroke-width="2"/>
+      <ellipse cx="116" cy="58" rx="61" ry="20" fill="#d6a577" stroke="#773c42" stroke-width="2"/>
+      <ellipse cx="116" cy="57" rx="51" ry="15" fill="#925138"/>
+      <path d="M116 67c-40-12-25-30-6-15 9-22 36-7 6 15" fill="#f9e8cd"/>
+      <path d="M97 27c-12-12 10-16 0-27m26 27c-12-12 10-16 0-27" fill="none" stroke="#aa7770" stroke-width="3" stroke-linecap="round"/>
+      <path d="M75 80l4 27q2 15 12 20" fill="none" stroke="white" stroke-width="5" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="art-pancakes" viewBox="0 0 240 180">
+      <ellipse cx="120" cy="145" rx="102" ry="24" fill="#ead4c0" stroke="#92644b" stroke-width="2"/>
+      <ellipse cx="120" cy="140" rx="85" ry="17" fill="#fff8e8"/>
+      <g fill="#cf8c47" stroke="#99603c" stroke-width="2">
+        <ellipse cx="76" cy="129" rx="30" ry="16"/><ellipse cx="127" cy="133" rx="31" ry="17"/><ellipse cx="171" cy="126" rx="28" ry="16"/>
+        <ellipse cx="54" cy="106" rx="29" ry="17"/><ellipse cx="100" cy="110" rx="31" ry="18"/><ellipse cx="148" cy="108" rx="29" ry="18"/><ellipse cx="188" cy="105" rx="27" ry="16"/>
+        <ellipse cx="82" cy="83" rx="30" ry="19"/><ellipse cx="132" cy="85" rx="30" ry="19"/><ellipse cx="167" cy="77" rx="28" ry="18"/>
+        <ellipse cx="110" cy="62" rx="30" ry="18"/><ellipse cx="148" cy="57" rx="26" ry="17"/>
+      </g>
+      <g fill="#f0bb70"><ellipse cx="80" cy="78" rx="22" ry="11"/><ellipse cx="99" cy="106" rx="23" ry="10"/><ellipse cx="146" cy="103" rx="20" ry="11"/><ellipse cx="109" cy="59" rx="22" ry="10"/></g>
+      <path d="M153 55q-4 20-50 22t-33 15 89 1 5 20-71 12" fill="none" stroke="#643c2f" stroke-width="7" stroke-linecap="round"/>
+      <g fill="#fff9e7"><circle cx="87" cy="67" r="2"/><circle cx="108" cy="83" r="2"/><circle cx="126" cy="99" r="2"/><circle cx="75" cy="119" r="2"/><circle cx="156" cy="118" r="2"/><circle cx="167" cy="78" r="2"/></g>
+      <path d="M106 35q-7-14 7-19 18-8 25 9l-11 20z" fill="#bf5662"/><path d="M115 16l2-10 8 9 8-6-4 11" fill="#65835b"/>
+    </symbol>
+    <symbol id="art-toast" viewBox="0 0 240 180">
+      <ellipse cx="120" cy="143" rx="98" ry="24" fill="#d6ddd0"/><ellipse cx="120" cy="140" rx="82" ry="16" fill="#f7f5df"/>
+      <path d="M49 117 70 64q-8-31 48-39t71 25q3 10-6 19l-11 53q-60 29-123-5" fill="#c78e59" stroke="#795b3a" stroke-width="3"/>
+      <path d="M60 111 82 65q-9-21 39-28t56 17q3 9-6 15l-9 43q-53 23-102-1" fill="#f7ddb0"/>
+      <g fill="#a3b171" stroke="#597352" stroke-width="2"><path d="M77 102q10-58 62-47-40 7-39 53z"/><path d="M99 112q5-61 58-55-36 14-32 61z"/><path d="M125 117q-5-62 38-53-23 20-17 55z"/></g>
+      <g fill="#fff7d9"><ellipse cx="90" cy="87" rx="2" ry="4" transform="rotate(30 90 87)"/><ellipse cx="119" cy="76" rx="2" ry="4"/><ellipse cx="126" cy="106" rx="2" ry="4"/><ellipse cx="152" cy="88" rx="2" ry="4"/></g>
+    </symbol>
+    <symbol id="art-matcha" viewBox="0 0 240 180">
+      <ellipse cx="118" cy="154" rx="66" ry="13" fill="#3b5035" opacity=".12"/>
+      <path d="m143 14-22 78" stroke="#657c5a" stroke-width="8" stroke-linecap="round"/>
+      <path d="M74 46h89l-10 102q-34 15-69 0z" fill="#faf0d9" stroke="#698062" stroke-width="2"/>
+      <path d="m79 85 6 62q33 14 67 0l7-70q-20 15-39 7t-41 1" fill="#b1c087"/>
+      <path d="m82 114 3 33q33 14 67 0l4-45q-19 31-36 13t-38-1" fill="#6f8d55"/>
+      <ellipse cx="118" cy="47" rx="44" ry="10" fill="#77945e" stroke="#698062" stroke-width="2"/>
+      <g fill="#e5ead2" opacity=".7" stroke="#9dab7f"><rect x="89" y="57" width="22" height="20" rx="5" transform="rotate(12 100 67)"/><rect x="125" y="62" width="24" height="21" rx="5" transform="rotate(-16 137 72)"/></g>
+      <path d="m95 85 4 47" stroke="#fffae9" stroke-width="4" opacity=".7"/>
+      <path d="M173 136q17-40 40-25-16 31-40 25m2-1 27-17" fill="#7f9467" stroke="#55734b" stroke-width="2"/>
+    </symbol>
+    <symbol id="art-cold" viewBox="0 0 240 180">
+      <ellipse cx="117" cy="158" rx="65" ry="12" fill="#835351" opacity=".12"/>
+      <path d="m148 8-23 81" stroke="#a5545b" stroke-width="7" stroke-linecap="round"/>
+      <path d="M75 43h88l-10 108q-34 12-68 0z" fill="#df9990" stroke="#ab6764" stroke-width="2"/>
+      <path d="m81 90 5 60q33 12 66 0l6-70q-28 12-77 10" fill="#c5686e"/>
+      <ellipse cx="119" cy="44" rx="44" ry="11" fill="#f0c3b2" stroke="#ab6764" stroke-width="2"/>
+      <path d="m94 65 5 69" stroke="#fbe0ce" stroke-width="5" opacity=".7"/>
+      <circle cx="165" cy="54" r="23" fill="#f6ddb0" stroke="#cf994c" stroke-width="3"/><path d="m165 35v38m-19-19h38m-32-13 26 26m0-26-26 26" stroke="#fff6dc" stroke-width="3"/>
+      <path d="M52 150q-25-17-10-31 11-10 24 4 8 15-14 27" fill="#bc5d66"/><path d="m44 119-2-12 10 8 9-5-3 13" fill="#68865c"/>
+    </symbol>
+    <symbol id="art-tea" viewBox="0 0 240 180">
+      <ellipse cx="117" cy="150" rx="85" ry="15" fill="#d6d1bc"/>
+      <path d="M170 66h14q45 0 17 40-9 13-30 7" fill="none" stroke="#82917a" stroke-width="10"/>
+      <path d="M60 63h113l-9 66q-48 37-95 0z" fill="#e1e5cd" stroke="#7c8d72" stroke-width="2"/>
+      <ellipse cx="117" cy="63" rx="57" ry="16" fill="#b78748" stroke="#7c8d72" stroke-width="2"/>
+      <ellipse cx="117" cy="62" rx="47" ry="10" fill="#d2a95d"/>
+      <path d="M145 64v44h15v24h-25v-24h10" fill="#f8edd3" stroke="#8b7760" stroke-width="2"/>
+      <path d="M93 37c-12-16 14-20 0-35m28 35c-12-16 14-20 0-35" fill="none" stroke="#a3ab91" stroke-width="3" stroke-linecap="round"/>
+      <path d="M35 135q-22-34-3-43 16 16 3 43m0 0q10-31 28-19-7 21-28 19" fill="#8fa16b"/>
+    </symbol>
+  </defs></svg>
+  <a class="skip" href="#content">Ir a la carta</a>
+  <div class="proposal-bar" id="proposal-bar" hidden>PROPUESTA DE DISEÑO · Alérgenos en revisión · 23.09.2026</div>
+  <header class="header wrap">
+    <a class="brand-logo" href="#inicio" aria-label="Esencia, inicio"><img src="logo_letras.png" alt="Esencia"></a>
+    <div class="header-right"><button id="promo-open" class="promo-open" hidden>Café del mes</button><span class="header-note" id="header-note">Un pequeño placer, cada día.</span><button class="lang" id="language" aria-label="Switch to English">ES <span>/ EN</span></button></div>
   </header>
-
-  <!-- LANDING -->
-  <main id="landing" class="landing">
-    <h1>Bienvenido a Esencia</h1>
-    <p>Selecciona tu idioma:</p>
-    <div class="lang-grid">
-      <button id="btn-es" class="lang-btn" aria-label="Español" title="Español">🇪🇸</button>
-      <button id="btn-en" class="lang-btn" aria-label="English" title="English">🇬🇧</button>
-    </div>
-  </main>
-
-  <!-- CARTA -->
-  <main id="menu" class="hidden">
-    <nav id="nav" class="nav"></nav>
-    <div id="app" class="container"></div>
-    <footer class="site-footer"><small id="igic-note">IGIC incluido</small></footer>
-  </main>
-
-  <!-- Import: firebase.js (debe exportar db) + Firestore -->
-  <script type="module">
-    import { db } from "./firebase.js";
-    import { getDoc, collection, doc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-
-    // Elementos
-    const landing  = document.getElementById("landing");
-    const menu     = document.getElementById("menu");
-    const switchEl = document.getElementById("lang-switch");
-    const chipEs   = document.getElementById("chip-es");
-    const chipEn   = document.getElementById("chip-en");
-
-    function setActiveChip(lang){
-      chipEs.classList.toggle("active", lang==="es");
-      chipEn.classList.toggle("active", lang==="en");
-    }
-
-    // ===== POPUP (solo imagen) =====
-    const promoModal = document.getElementById("promo-modal");
-    const promoTitle = document.getElementById("promo-title");
-    const promoImg   = document.getElementById("promo-img");
-    const promoLink  = document.getElementById("promo-link");
-    const promoDont  = document.getElementById("promo-dontshow");
-
-    function promoKey(version, lang){
-      return `esencia_promo_seen_${String(version || "v0")}_${lang}`;
-    }
-
-    function hidePromo(){
-      if (!promoModal) return;
-      promoModal.classList.add("promoHidden");
-      promoModal.setAttribute("aria-hidden", "true");
-      document.body.style.overflow = "";
-    }
-
-    function showPromo({ title, imageUrl, linkUrl, alt, version, lang }){
-      if (!promoModal) return;
-
-      try {
-        if (localStorage.getItem(promoKey(version, lang)) === "1") return;
-      } catch {}
-
-      promoModal.dataset.version = version || "v0";
-
-      if (promoTitle) promoTitle.textContent = title || (lang === "en" ? "New & featured" : "Novedades");
-      if (promoImg) {
-        promoImg.src = imageUrl;
-        promoImg.alt = alt || (lang === "en" ? "Promotion" : "Promoción");
-      }
-
-      if (promoLink) {
-        if (linkUrl) {
-          promoLink.href = linkUrl;
-          promoLink.style.pointerEvents = "auto";
-        } else {
-          promoLink.href = "#";
-          promoLink.style.pointerEvents = "none";
-        }
-      }
-
-      promoModal.classList.remove("promoHidden");
-      promoModal.setAttribute("aria-hidden", "false");
-      document.body.style.overflow = "hidden";
-    }
-
-    function setupPromoListeners(){
-      if (!promoModal) return;
-      promoModal.querySelectorAll("[data-promo-close]").forEach(el => {
-        el.addEventListener("click", hidePromo);
-      });
-      if (promoDont) {
-        promoDont.addEventListener("click", () => {
-          const version = promoModal.dataset.version || "v0";
-          const lang = window.LOCALE || "es";
-          try { localStorage.setItem(promoKey(version, lang), "1"); } catch {}
-          hidePromo();
-        });
-      }
-    }
-
-    async function fetchPromoMeta(){
-      try {
-        const snap = await getDoc(doc(collection(db, "settings"), "menu"));
-        if (!snap.exists()) return null;
-        return snap.data() || null;
-      } catch {
-        return null;
-      }
-    }
-
-    let PROMO_META_CACHE = null;
-    async function getPromoMeta(){
-      if (PROMO_META_CACHE) return PROMO_META_CACHE;
-      PROMO_META_CACHE = await fetchPromoMeta();
-      return PROMO_META_CACHE;
-    }
-
-    setupPromoListeners();
-
-    // Mostrar carta SOLO cuando el usuario elige
-    async function showMenuWith(lang){
-      window.LOCALE = (lang === "en") ? "en" : "es";
-      landing.classList.add("hidden");
-      menu.classList.remove("hidden");
-      switchEl.classList.remove("hidden");
-      setActiveChip(window.LOCALE);
-
-      // Popup promo al entrar
-      (async () => {
-        const meta = await getPromoMeta();
-        if (!meta || !meta.promo_enabled) return;
-
-        const version = meta.promo_version || "v1";
-        const imageUrl = meta.promo_image_url || "";
-        if (!imageUrl) return;
-
-        const titleObj = meta.promo_title || {};
-        const altObj   = meta.promo_alt || {};
-        const linkObj  = meta.promo_link || {};
-
-        const title = (lang === "en" ? (titleObj.en || titleObj.es) : (titleObj.es || titleObj.en)) || "";
-        const alt   = (lang === "en" ? (altObj.en || altObj.es) : (altObj.es || altObj.en)) || "";
-
-        const linkUrl = (typeof linkObj === "string")
-          ? linkObj
-          : (lang === "en" ? (linkObj.en || linkObj.es) : (linkObj.es || linkObj.en)) || "";
-
-        showPromo({ title, imageUrl, linkUrl, alt, version, lang });
-      })();
-
-      if (!window.__menuLoaded) {
-        window.__menuLoaded = true;
-        const script = document.createElement("script");
-        script.type = "module";
-        script.src = "./app.multilang.js";
-        document.body.appendChild(script);
-      } else {
-        window.__setLocale?.(window.LOCALE);
-      }
-    }
-
-    // Click en banderas (landing)
-    document.getElementById("btn-es").addEventListener("click", ()=> showMenuWith("es"));
-    document.getElementById("btn-en").addEventListener("click", ()=> showMenuWith("en"));
-
-    // Chips del header (cambiar idioma dentro de la carta)
-    chipEs.addEventListener("click", ()=> showMenuWith("es"));
-    chipEn.addEventListener("click", ()=> showMenuWith("en"));
-
-    // Importante: no leemos ni guardamos preferencia
-    // -> Siempre se queda en la landing hasta que el usuario elige.
-  </script>
+  <div class="toolbar"><div class="wrap toolbar-inner">
+    <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/></svg><input id="search" type="search" placeholder="¿Qué te apetece? Café, aguacate, matcha…" aria-label="Buscar en toda la carta" autocomplete="off"></label>
+    <button class="allergen-button" id="allergen-button" hidden><span aria-hidden="true">ⓘ</span> <span id="allergen-button-label">Mis alérgenos</span><span class="filter-count" id="filter-count" hidden></span></button>
+  </div></div>
+  <main id="content" class="wrap" tabindex="-1"></main>
+  <footer class="wrap footer"><span class="brand-logo footer-logo"><img src="logo_letras.png" alt="Esencia"></span><span id="footer-note">Precios con IGIC incluido · Si tienes alguna alergia, habla con nuestro equipo.</span><a href="#inicio" id="footer-home">Volver al inicio ↑</a></footer>
+  <dialog id="product-dialog" aria-labelledby="product-title"><button class="close" data-close="product-dialog" aria-label="Cerrar">×</button><div id="product-content"></div></dialog>
+  <dialog id="allergen-dialog" aria-labelledby="allergen-title"><button class="close" data-close="allergen-dialog" aria-label="Cerrar">×</button><div id="allergen-content"></div></dialog>
+  <dialog id="promo-dialog" aria-labelledby="promo-title"><button class="close" data-close="promo-dialog" aria-label="Cerrar">×</button><h2 id="promo-title">Café del mes</h2><a id="promo-link" target="_blank" rel="noopener noreferrer"><img id="promo-image" alt="Café del mes"></a><button id="promo-view-menu" class="primary" data-close="promo-dialog">Ver carta</button></dialog>
+  <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
 </body>
 </html>
