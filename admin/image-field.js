@@ -2,20 +2,27 @@ import {mountPhotoEditor} from './photo-editor.js';
 import {escapeHTML, safeImageURL, MAX_IMAGE_LENGTH} from '../shared/menu-model.js';
 
 export async function optimisePhoto(file) {
-  if (!['image/jpeg','image/png','image/webp'].includes(file.type)) throw new Error('Elige una foto JPG, PNG o WebP.');
+  if (!['image/jpeg','image/png','image/webp','image/heic','image/heif',''].includes(file.type)) throw new Error('Elige una foto JPG, PNG o WebP.');
   if (file.size > 20 * 1024 * 1024) throw new Error('La foto supera los 20 MB. Elige una más pequeña.');
   const url=URL.createObjectURL(file), img=new Image();
   try {
-    img.src=url; await img.decode();
-    let width=Math.min(1200,img.naturalWidth), result='';
+    img.src=url;
+    try {await img.decode();} catch {throw new Error('El navegador no puede leer esta foto. Exporta una copia JPG desde la galería y vuelve a seleccionarla.');}
+    let width=Math.round(img.naturalWidth*Math.min(1,1200/Math.max(img.naturalWidth,img.naturalHeight))), result='';
     const ratio=img.naturalHeight/img.naturalWidth;
     const canvas=document.createElement('canvas');
+    canvas.width=canvas.height=1;
+    // Some browsers silently export PNG when WebP encoding is unavailable.
+    const format=canvas.toDataURL('image/webp').startsWith('data:image/webp;')?'image/webp':'image/jpeg';
     for (let attempt=0;attempt<8;attempt++) {
       canvas.width=width;canvas.height=Math.max(1,Math.round(width*ratio));
-      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      const context=canvas.getContext('2d');
+      if(!context)throw new Error('No se pudo preparar la foto. Cierra otras pestañas y vuelve a intentarlo.');
+      if(format==='image/jpeg'){context.fillStyle='#ffffff';context.fillRect(0,0,canvas.width,canvas.height);}
+      context.drawImage(img,0,0,canvas.width,canvas.height);
       for (const quality of [.82,.7,.58,.46]) {
-        result=canvas.toDataURL('image/webp',quality);
-        if (result.length <= MAX_IMAGE_LENGTH) return result;
+        result=canvas.toDataURL(format,quality);
+        if (result.startsWith('data:'+format+';') && result.length <= MAX_IMAGE_LENGTH) return result;
       }
       width=Math.round(width*.78);
     }

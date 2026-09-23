@@ -8,7 +8,7 @@ import {normaliseFrames} from '../shared/photo-frame.js';
 
 import { db } from "../firebase.js";
 import {alphabeticalToppings, DEFAULT_CATEGORIES, categoryForSection, visualCategories, safeImageURL, escapeHTML} from '../shared/menu-model.js';
-import {mountImageField} from './image-field.js';
+import {mountImageField} from './image-field.js?v=mobile2';
 import {
   doc, setDoc, updateDoc, deleteDoc, getDoc, deleteField,
   collection, getDocs, addDoc, serverTimestamp
