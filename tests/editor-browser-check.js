@@ -11,6 +11,8 @@ async (page) => {
     'sections/tostas/items/hidden':{name:'No debe aparecer',hidden:true,price:8},
     'sections/extras-tostas':{title:'Extras (tostas/croissant)',group:'Desayunos'},
     'sections/extras-tostas/items/cheese':{name:'Queso Crema',price:2},
+    'sections/especiales':{title:'Especiales',group:'Café'},
+    'sections/especiales/items/latte':{name:'Latte prueba',price:3},
     'sections/cafe':{title:'Café',group:'Café'},
     'sections/cafe/items/coffee':{name:'Expreso',price:1.2},
     'sections/mini-pancakes':{title:'Mini Pancakes',group:'Poffertjes',base:{title:'Base',description:'12 mini pancakes',price:3.5}},
@@ -61,6 +63,18 @@ async (page) => {
   await page.route('**/firebase-firestore.js',r=>r.fulfill({headers:cors,body:firestore}));
   const saved=async()=>{await page.locator('dialog.editor-dialog').waitFor({state:'detached'});await page.waitForLoadState('networkidle');await page.locator('#sections .loading').waitFor({state:'hidden'});};
   await page.goto(origin+'/admin/');
+  await page.getByRole('link',{name:'Cafés y especiales',exact:true}).click();
+  await page.locator('#edit-item-especiales-latte').click();
+  await page.getByLabel('Se sirve caliente',{exact:true}).check();
+  await page.getByLabel('Se sirve frío',{exact:true}).check();
+  await page.getByRole('button',{name:'Guardar',exact:true}).click();await saved();
+  must(fixture.get('sections/especiales/items/latte').serving_temperatures.join(',')==='hot,cold','Temperature modes not saved');
+  await page.locator('#edit-item-especiales-latte').click();
+  must(await page.getByLabel('Se sirve frío',{exact:true}).isChecked(),'Temperature modes not restored');
+  await page.getByLabel('Se sirve caliente',{exact:true}).uncheck();
+  await page.getByRole('button',{name:'Guardar',exact:true}).click();await saved();
+  must(fixture.get('sections/especiales/items/latte').serving_temperatures.join(',')==='cold','Hot mode not removed');
+  await page.getByRole('link',{name:'Tostas y desayunos',exact:true}).click();
   await page.getByRole('button',{name:'Fotos y categorías',exact:true}).click();
   await page.getByRole('button',{name:'Editar Tostas y desayunos',exact:true}).click();
   await page.getByLabel('Nombre (ES)',{exact:true}).fill('Desayunos con foto');

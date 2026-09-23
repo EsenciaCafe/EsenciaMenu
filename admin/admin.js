@@ -1,3 +1,4 @@
+import {temperatureIcons} from '../shared/temperature.js';
 import {normaliseFrames} from '../shared/photo-frame.js';
 // admin/admin.js
 // Editor CRUD con formularios, soporte ES/EN, order, toppings,
@@ -265,7 +266,7 @@ function sectionCard(sec){
     const price=it.free?'Gratis':it.price===undefined||it.price===''?'Sin precio':escapeHTML(String(it.price))+' €';
     return `<article class="catalog-card ${it.hidden||sec.hidden?'is-unavailable':''}">
       <div class="catalog-photo">${src?`<img src="${escapeHTML(src)}" alt="${escapeHTML(it.name)}" loading="lazy">`:'<span>Sin foto</span>'}<span class="availability-pill">${sec.hidden?'Sección oculta':it.hidden?'No disponible':'Disponible'}</span></div>
-      <div class="catalog-body"><div class="catalog-heading"><h3>${escapeHTML(it.name||it.name_en||'Sin nombre')}</h3><strong>${price}</strong></div>${it.desc?`<p class="catalog-description">${escapeHTML(it.desc)}</p>`:''}
+      <div class="catalog-body"><div class="catalog-heading"><h3>${escapeHTML(it.name||it.name_en||'Sin nombre')}${temperatureIcons(it)}</h3><strong>${price}</strong></div>${it.desc?`<p class="catalog-description">${escapeHTML(it.desc)}</p>`:''}
       <div class="catalog-actions"><button class="btn accent" id="edit-${prefix}-${sec.id}-${it.id}">Editar</button><button class="btn" id="toggle-${prefix}-${sec.id}-${it.id}" aria-label="${it.hidden?'Activar':'Marcar no disponible'} ${escapeHTML(it.name)}">${it.hidden?'Activar':'No disponible'}</button>
       <details class="catalog-more"><summary aria-label="Más opciones de ${escapeHTML(it.name)}">•••</summary><div>${kind==='top'&&sec.id==='mini-pancakes'?'':`<button class="btn" id="order-${prefix}-${sec.id}-${it.id}">Cambiar orden</button>`}<button class="btn danger" id="del-${prefix}-${sec.id}-${it.id}">Eliminar</button></div></details></div></div></article>`;
   };
@@ -487,6 +488,10 @@ async function onAddItem(sec){
       imageField,
       { name:"name", label:"Nombre (ES)" },
       { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
+      ...(sec.id==='especiales'?[
+        {name:'serve_hot',type:'checkbox',help:'Se sirve caliente'},
+        {name:'serve_cold',type:'checkbox',help:'Se sirve frío',note:'Marca una o ambas opciones. Sin marcar: no se muestran iconos.'}
+      ]:[]),
       { name:"desc", label:"Descripción (ES)", type:"textarea", rows:2, placeholder:"Opcional" },
       { name:"desc_en", label:"Description (EN)", type:"textarea", rows:2, placeholder:"Opcional" },
       { name:"price", label:"Precio", placeholder:"ej: 3.50" },
@@ -502,6 +507,7 @@ async function onAddItem(sec){
     hidden: !!data.hidden,
     createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
   };
+  if(sec.id==='especiales')payload.serving_temperatures=[...(data.serve_hot?['hot']:[]),...(data.serve_cold?['cold']:[])];
   if (data.image_url){payload.image_url=data.image_url;payload.image_frame=data.image_frame;}
   if (data.name_en) payload.name_en = data.name_en;
   if (data.desc) payload.desc = data.desc;
@@ -517,6 +523,8 @@ async function onEditItem(sec, it){
     title: `Editar item: ${it.name}`,
     submitLabel: "Guardar",
     initial: {
+      serve_hot:it.serving_temperatures?.includes("hot")||false,
+      serve_cold:it.serving_temperatures?.includes("cold")||false,
       image_url:it.image_url || "",
       image_frame:it.image_frame || {},
       name: it.name || "",
@@ -531,6 +539,10 @@ async function onEditItem(sec, it){
       imageField,
       { name:"name", label:"Nombre (ES)" },
       { name:"name_en", label:"Name (EN)", placeholder:"Opcional" },
+      ...(sec.id==='especiales'?[
+        {name:'serve_hot',type:'checkbox',help:'Se sirve caliente'},
+        {name:'serve_cold',type:'checkbox',help:'Se sirve frío',note:'Marca una o ambas opciones. Sin marcar: no se muestran iconos.'}
+      ]:[]),
       { name:"desc", label:"Descripción (ES)", type:"textarea", rows:2, placeholder:"Opcional" },
       { name:"desc_en", label:"Description (EN)", type:"textarea", rows:2, placeholder:"Opcional" },
       { name:"price", label:"Precio" },
@@ -546,6 +558,7 @@ async function onEditItem(sec, it){
     hidden: !!data.hidden,
     updatedAt: serverTimestamp(),
   };
+  if(sec.id==='especiales')patch.serving_temperatures=[...(data.serve_hot?['hot']:[]),...(data.serve_cold?['cold']:[])];
   patch.image_url = data.image_url || deleteField();
   patch.image_frame = data.image_url ? data.image_frame : deleteField();
   patch.name_en = data.name_en ? data.name_en : deleteField();
