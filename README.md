@@ -43,5 +43,3 @@ EsenciaMenu/assets/popup/images.json
 ```txt
 https://esenciacafe.github.io/EsenciaMenu/promo-manager.html
 ```
-
-Mi pedido es una lista personal: cantidades y notas libres de extras/preparación, sin total ni envío al local. Se guarda en localStorage durante 24 horas desde el último cambio y permite copiar el texto. Prueba de navegador: tests/order-browser-check.js (servidor local en 4173).
