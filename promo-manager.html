@@ -320,7 +320,10 @@
         </div>
 
         <div style="margin-top:14px">
-          <label for="imageUrl">Imagen seleccionada</label>
+          <button id="choosePhotoBtn" class="secondary" type="button">Elegir foto del dispositivo</button>
+          <input id="photoFile" type="file" accept="image/*" hidden />
+          <p id="photoStatus" class="small" role="status">Elige una foto de tu galería. Se adapta automáticamente y se publica al guardar los cambios.</p>
+          <label for="imageUrl">O pega una URL / ruta de imagen</label>
           <input id="imageUrl" type="text" placeholder="assets/popup/imagen.webp" />
           <div class="small" style="margin-top:8px">
             Usa una ruta tipo <code>assets/popup/imagen.webp</code> o una URL directa.
@@ -328,11 +331,11 @@
         </div>
 
         <div class="actions">
-          <button id="saveBtn" class="primary" type="button">Guardar cambios</button>
+          <button id="saveBtn" class="primary" type="button" disabled>Guardar cambios</button>
           <button id="reloadBtn" class="secondary" type="button">Recargar</button>
         </div>
 
-        <div id="status" class="status"></div>
+        <div id="status" class="status" role="status"></div>
       </section>
 
       <section class="card">
@@ -345,8 +348,8 @@
       <section class="card" style="grid-column:1/-1">
         <div class="galleryHeader">
           <div>
-            <h2 style="margin-bottom:4px">Imágenes disponibles</h2>
-            <div class="small">Se cargan desde <code>assets/popup/images.json</code></div>
+            <h2 style="margin-bottom:4px">Imágenes del menú</h2>
+            <div class="small">También puedes reutilizar una de estas imágenes.</div>
           </div>
 
           <button id="galleryReloadBtn" class="secondary" type="button">Actualizar galería</button>
@@ -358,7 +361,9 @@
     </main>
   </div>
 
-  <<script type="module">
+  <script type="module">
+import { optimisePhoto } from "./admin/image-field.js";
+import { safeImageURL } from "./shared/menu-model.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import {
@@ -405,6 +410,48 @@ const previewEl = $("preview");
 const galleryEl = $("gallery");
 const galleryStatusEl = $("galleryStatus");
 const galleryReloadBtn = $("galleryReloadBtn");
+const choosePhotoBtn = $("choosePhotoBtn");
+const photoFileEl = $("photoFile");
+const photoStatusEl = $("photoStatus");
+let selectedImage = "";
+let busy = false;
+
+function updateControls() {
+  saveBtn.disabled = busy || auth.currentUser?.uid !== ADMIN_UID;
+  for (const el of [choosePhotoBtn, photoFileEl, imageUrlEl, enabledEl, reloadBtn, galleryReloadBtn]) {
+    el.disabled = busy;
+  }
+  document.querySelectorAll(".thumb").forEach(el => { el.disabled = busy; });
+}
+
+function selectImage(value, message = "") {
+  selectedImage = normalizeUrl(value);
+  const embedded = selectedImage.startsWith("data:");
+  imageUrlEl.value = embedded ? "" : selectedImage;
+  photoStatusEl.textContent = message || (embedded
+    ? "Foto guardada. Puedes elegir otra foto para reemplazarla."
+    : "Elige una foto de tu galería. Se adapta automáticamente y se publica al guardar los cambios.");
+  updatePreview();
+  markSelected();
+}
+
+async function choosePhoto() {
+  const file = photoFileEl.files[0];
+  if (!file || busy) return;
+  busy = true;
+  updateControls();
+  photoStatusEl.textContent = "Preparando foto…";
+  try {
+    const photo = await optimisePhoto(file);
+    selectImage(photo, `${file.name}: foto preparada. Pulsa Guardar cambios para publicarla.`);
+  } catch (err) {
+    photoStatusEl.textContent = err.message || "No se pudo preparar la foto. Prueba con otra imagen.";
+  } finally {
+    photoFileEl.value = "";
+    busy = false;
+    updateControls();
+  }
+}
 
 function setStatus(msg, type = "") {
   statusEl.textContent = msg;
@@ -419,6 +466,7 @@ function setGalleryStatus(msg, type = "") {
 function normalizeUrl(value) {
   const raw = (value || "").trim();
   if (!raw) return "";
+  if (!safeImageURL(raw)) return "";
 
   if (raw.includes("github.com") && raw.includes("/tree/")) return "";
 
@@ -434,28 +482,28 @@ function normalizeUrl(value) {
 }
 
 function updatePreview() {
-  const url = normalizeUrl(imageUrlEl.value);
+  const url = safeImageURL(selectedImage);
 
   if (!url) {
-    previewEl.innerHTML = `<div class="empty">Ruta inválida.</div>`;
+    previewEl.innerHTML = `<div class="empty">Selecciona una foto o introduce una ruta válida.</div>`;
     return;
   }
 
   previewEl.innerHTML = "";
 
   const img = document.createElement("img");
-  img.src = url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
+  img.src = url;
   img.alt = "Vista previa promo";
 
   img.onerror = () => {
-    previewEl.innerHTML = `<div class="empty">No se pudo cargar la imagen.</div>`;
+    if (previewEl.contains(img)) previewEl.innerHTML = `<div class="empty">No se pudo cargar la imagen.</div>`;
   };
 
   previewEl.appendChild(img);
 }
 
 function markSelected() {
-  const selected = normalizeUrl(imageUrlEl.value);
+  const selected = selectedImage;
 
   document.querySelectorAll(".thumb").forEach(el => {
     el.classList.toggle("selected", normalizeUrl(el.dataset.url) === selected);
@@ -463,6 +511,9 @@ function markSelected() {
 }
 
 async function loadMenuConfig() {
+  if (busy) return;
+  busy = true;
+  updateControls();
   try {
     setStatus("Cargando configuración...");
 
@@ -476,19 +527,20 @@ async function loadMenuConfig() {
     const data = snap.data();
 
     enabledEl.checked = Boolean(data.promo_enabled);
-    imageUrlEl.value = data.promo_image_url || "";
-
-    updatePreview();
-    markSelected();
+    selectImage(data.promo_image_url || "");
 
     setStatus("Configuración cargada", "ok");
   } catch (err) {
     console.error(err);
     setStatus("Error cargando configuración", "err");
+  } finally {
+    busy = false;
+    updateControls();
   }
 }
 
 async function saveMenuConfig() {
+  if (busy) return;
   const user = auth.currentUser;
 
   if (!user || user.uid !== ADMIN_UID) {
@@ -496,15 +548,16 @@ async function saveMenuConfig() {
     return;
   }
 
-  const imageUrl = normalizeUrl(imageUrlEl.value);
+  const imageUrl = normalizeUrl(selectedImage);
 
   if (!imageUrl) {
-    setStatus("La URL de la imagen no es válida", "err");
+    setStatus("Elige una foto o introduce una URL de imagen válida", "err");
     return;
   }
 
   try {
-    saveBtn.disabled = true;
+    busy = true;
+    updateControls();
     setStatus("Guardando...");
 
     await setDoc(menuRef, {
@@ -514,11 +567,13 @@ async function saveMenuConfig() {
     }, { merge: true });
 
     setStatus("Guardado correctamente", "ok");
+    if (imageUrl.startsWith("data:")) photoStatusEl.textContent = "Foto guardada. Puedes elegir otra foto para reemplazarla.";
   } catch (err) {
     console.error(err);
     setStatus("Error guardando en Firestore", "err");
   } finally {
-    saveBtn.disabled = false;
+    busy = false;
+    updateControls();
   }
 }
 
@@ -544,15 +599,15 @@ async function loadGallery() {
       `;
 
       card.addEventListener("click", () => {
-        imageUrlEl.value = url;
-        updatePreview();
-        markSelected();
+        if (busy) return;
+        selectImage(url, "Imagen seleccionada. Pulsa Guardar cambios para publicarla.");
       });
 
       galleryEl.appendChild(card);
     });
 
     markSelected();
+    updateControls();
     setGalleryStatus(`${images.length} imagen(es) cargadas`, "ok");
   } catch (err) {
     console.error(err);
@@ -571,6 +626,7 @@ async function initAuth() {
   }
 
   onAuthStateChanged(auth, (user) => {
+    updateControls();
     if (!user) {
       saveBtn.disabled = true;
       loginBtn.disabled = false;
@@ -588,7 +644,6 @@ async function initAuth() {
       return;
     }
 
-    saveBtn.disabled = false;
     setStatus("Sesión iniciada correctamente", "ok");
   });
 }
@@ -605,8 +660,12 @@ logoutBtn.addEventListener("click", async () => {
 saveBtn.addEventListener("click", saveMenuConfig);
 reloadBtn.addEventListener("click", loadMenuConfig);
 galleryReloadBtn.addEventListener("click", loadGallery);
+choosePhotoBtn.addEventListener("click", () => photoFileEl.click());
+photoFileEl.addEventListener("change", choosePhoto);
 
 imageUrlEl.addEventListener("input", () => {
+  selectedImage = normalizeUrl(imageUrlEl.value);
+  photoStatusEl.textContent = "Pulsa Guardar cambios para aplicar la imagen indicada.";
   updatePreview();
   markSelected();
 });
