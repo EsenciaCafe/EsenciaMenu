@@ -18,3 +18,4 @@ dialog{border:1px solid var(--line);background:var(--paper);color:var(--ink);bor
 [hidden]{display:none!important}
 
 .category h3{margin-right:0;max-width:none}.category p{padding-right:0}
+.category[aria-busy=true],.chip[aria-busy=true]{opacity:.65;cursor:progress}.category[aria-busy=true] .category-label:after{content:"…";position:absolute;right:12px;bottom:12px;font-size:22px}

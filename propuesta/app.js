@@ -8,6 +8,23 @@ const baseline = window.MENU_DATA.sections;
 // Show recorded findings; missing data never implies absence of allergens.
 const SHOW_ALLERGENS = true;
 let products = [], allEntries = [];
+let menuSource=null, loadedSections=new Map(), navigationVersion=0, sessionVersion=0;
+function requiredSections(id){
+  const g=groups.find(g=>g.id===id);if(!g)return menuSource.sections.map(s=>s.id);
+  const extras=[];
+  if(g.sections.some(s=>['tostas','croissants-dulces'].includes(s)))extras.push('extras-tostas');
+  if(g.sections.some(s=>['cafe','especiales','matcha','chocolate-caliente'].includes(s)))extras.push('extras-bebidas');
+  return [...g.sections,...extras.filter(s=>menuSource.sections.some(x=>x.id===s))];
+}
+function ready(ids){return ids.every(id=>loadedSections.has(id));}
+async function ensureData(ids){
+  const source=menuSource,version=sessionVersion;
+  const rows=await source.load(ids);if(version!==sessionVersion)return;
+  rows.forEach(s=>loadedSections.set(s.id,s));
+  sections=normaliseMenu([...loadedSections.values()],baseline);
+  products=sections.flatMap(s=>s.items.map(i=>({s,i,key:key(s,i)})));
+  allEntries=[...products,...sections.flatMap(s=>s.toppings.map(i=>({s,i,key:key(s,i)})))];
+}
 let promoReady = false, promoShown = false;
 const allergenNames = [
   ['Gluten','Gluten'],['Crustáceos','Crustaceans'],['Huevo','Egg'],['Pescado','Fish'],['Cacahuete','Peanuts'],['Soja','Soy'],['Leche','Milk'],['Frutos de cáscara','Tree nuts'],['Apio','Celery'],['Mostaza','Mustard'],['Sésamo','Sesame'],['Sulfitos','Sulphites'],['Altramuces','Lupin'],['Moluscos','Molluscs']
@@ -28,7 +45,7 @@ const getSection = id => sections.find(s=>s.id===id);
 const key = (s,i) => s.id+'|'+i.id;
 const findEntry = k => allEntries.find(p=>p.key===k);
 const extraSections = new Set(EXTRA_SECTIONS);
-function photo(url, alt, className='',frames={},slot='product') { const src=safeImageURL(url); return src ? `<span class="photo-frame ${className}" data-photo-slot="${slot}" style="${frameStyle(frames,slot)}"><img class="menu-photo" src="${esc(src)}" alt="${esc(alt)}" loading="lazy" decoding="async"></span>` : ''; }
+function photo(url, alt, className='',frames={},slot='product') { const src=safeImageURL(url); return src ? `<span class="photo-frame ${className}" data-photo-slot="${slot}" style="${frameStyle(frames,slot)}"><img class="menu-photo" src="${esc(src)}" alt="${esc(alt)}" loading="${slot==='hero'?'eager':'lazy'}" decoding="async"></span>` : ''; }
 function groupArt(g) { return `<div class="group-art" style="--tone:${g.tone}">${art(g.art)}${photo(g.image_url,bi(g.name),'',g.image_frame,'group')}</div>`; }
 function route(){const id=location.hash.slice(1);if(id==='toda')history.replaceState(null,'',location.pathname+location.search+'#inicio');return groups.some(g=>g.id===id) ? id : 'inicio';}
 function canonical(a){const n=norm(a);if(/gluten|trigo|avena|cebada|centeno/.test(n))return 'Gluten';return allergenNames.find(pair=>n.startsWith(norm(pair[0])))?.[0] || a;}
@@ -52,6 +69,14 @@ function renderHome(){
 function render(){
   if (loading) { $('#content').innerHTML=`<div class="loading-state" role="status">${t('Cargando la carta…','Loading the menu…')}</div>`; return; }
   if (loadError) { $('#content').innerHTML=`<div class="empty"><h1>${t('No se ha podido cargar la carta.','The menu could not be loaded.')}</h1><p>${t('Comprueba la conexión e inténtalo de nuevo.','Check your connection and try again.')}</p><button class="primary" data-retry>${t('Reintentar','Try again')}</button></div>`; return; }
+  if(menuSource&&(query.trim()||route()!=='inicio')){
+    const ids=requiredSections(query.trim()?'search':route());
+    if(!ready(ids)){
+      const view=query+'|'+route(),version=sessionVersion;
+      $('#content').innerHTML=`<div class="loading-state" role="status">${t('Preparando los productos…','Loading products…')}</div>`;
+      ensureData(ids).then(()=>{if(version===sessionVersion&&view===query+'|'+route())render();}).catch(()=>{if(version===sessionVersion&&view===query+'|'+route()){loadError=true;render();}});return;
+    }
+  }
   let content;
   if(query.trim()){
     const terms=norm(query).trim().split(/\s+/);
@@ -109,12 +134,18 @@ function setLanguage(){
   document.querySelectorAll('.close').forEach(b=>b.setAttribute('aria-label',t('Cerrar','Close')));
   render();
 }
-function go(id){query='';$('#search').value='';subcategory='all';if(location.hash==='#'+id){render();window.scrollTo(0,0);}else location.hash=id;}
-document.addEventListener('click',e=>{
+function go(id){navigationVersion++;query='';$('#search').value='';subcategory='all';if(location.hash==='#'+id){render();window.scrollTo(0,0);}else location.hash=id;}
+document.addEventListener('click',async e=>{
   if(e.target.closest('[data-retry]')){start();return;}
   const product=e.target.closest('[data-product]');if(product){openProduct(product.dataset.product);return;}
   const group=e.target.closest('[data-group]');if(group){
     const category=groups.find(g=>g.id===group.dataset.group);
+    const version=++navigationVersion,session=sessionVersion;
+    group.setAttribute('aria-busy','true');
+    $('#announcer').textContent=t('Preparando los productos…','Loading products…');
+    try{await ensureData(requiredSections(group.dataset.group));}catch{if(version===navigationVersion&&session===sessionVersion){loadError=true;render();}return;}finally{group.removeAttribute('aria-busy');}
+    if(version!==navigationVersion||session!==sessionVersion)return;
+    $('#announcer').textContent='';
     const entries=category?products.filter(p=>category.sections.includes(p.s.id)):[];
     if(entries.length===1)openProduct(entries[0].key);
     else go(group.dataset.group);
@@ -129,9 +160,9 @@ document.addEventListener('click',e=>{
 document.addEventListener('change',e=>{
   if(e.target.matches('[data-allergen]')){e.target.checked?selectedAllergens.add(e.target.value):selectedAllergens.delete(e.target.value);render();}
 });
-$('#search').addEventListener('input',e=>{query=e.target.value;render();});
+$('#search').addEventListener('input',e=>{navigationVersion++;query=e.target.value;render();});
 $('#language').addEventListener('click',()=>{lang=en()?'es':'en';setLanguage();});
-window.addEventListener('hashchange',()=>{subcategory='all';query='';$('#search').value='';render();window.scrollTo(0,0);$('#content').focus({preventScroll:true});});
+window.addEventListener('hashchange',()=>{navigationVersion++;subcategory='all';query='';$('#search').value='';render();window.scrollTo(0,0);$('#content').focus({preventScroll:true});});
 document.querySelectorAll('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}}));
 setLanguage();
 
@@ -166,14 +197,19 @@ function showPromo(){
 }
 $('#promo-open').addEventListener('click',showPromo);
 async function start(){
-  loading=true;loadError=false;render();
+  const version=++sessionVersion;navigationVersion++;loading=true;loadError=false;menuSource=null;loadedSections=new Map();render();
   try{
-    const {readMenu}=await import('../shared/menu-repository.js');
-    const live=await readMenu();meta=live.meta;
-    sections=normaliseMenu(live.sections,baseline);groups=visualCategories(meta,sections);
-    products=sections.flatMap(s=>s.items.map(i=>({s,i,key:key(s,i)})));
-    allEntries=[...products,...sections.flatMap(s=>s.toppings.map(i=>({s,i,key:key(s,i)})))];
+    const {openMenu}=await import('../shared/menu-repository.js?v=progressive1');
+    const source=await openMenu();if(version!==sessionVersion)return;
+    menuSource=source;meta=source.meta;groups=visualCategories(meta,source.sections);
+    sections=[];products=[];allEntries=[];
     loading=false;render();preparePromo();
-  }catch(e){console.error('No se pudo cargar la carta',e);loading=false;loadError=true;render();}
+    setTimeout(async()=>{
+      for(const section of source.sections){
+        if(version!==sessionVersion)return;
+        try{await ensureData([section.id]);}catch{/* Navigation retries failed reads. */}
+      }
+    },350);
+  }catch(e){if(version!==sessionVersion)return;console.error('No se pudo cargar la carta',e);loading=false;loadError=true;render();}
 }
 start();

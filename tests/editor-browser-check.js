@@ -22,7 +22,8 @@ async (page) => {
     'sections/hidden-section/items/hidden-product':{name:'Oculto con sección',price:4}
   }));
   const must=(value,message)=>{if(!value)throw new Error(message);};
-  const writes=[];const errors=[];let failReads=false;
+  const writes=[];const errors=[];let failReads=false,holdProductReads=false,releaseProductReads;
+  const productGate=new Promise(resolve=>{releaseProductReads=resolve;});
   page.on('pageerror',e=>errors.push(e.message));
   const cors={'access-control-allow-origin':'*','content-type':'text/javascript'};
   await page.route('**/*.googleapis.com/**',r=>r.abort());
@@ -30,6 +31,7 @@ async (page) => {
   await page.route('**/firebase-auth.js',r=>r.fulfill({headers:cors,body:`export const getAuth=()=>({});export const onAuthStateChanged=(a,cb)=>queueMicrotask(()=>cb({email:'prueba-local@example.test'}));export const signInWithEmailAndPassword=async()=>{};export const signOut=async()=>{};`}));
   await page.route('**/__menu_test__',async r=>{
     const {op,path,data,merge}=r.request().postDataJSON();
+    if(holdProductReads&&op==='list'&&path.split('/').length>1)await productGate;
     if(failReads&&(op==='get'||op==='list'))return r.fulfill({status:503,body:'Unavailable'});
     const mergeInto=(target,source)=>{for(const [k,v] of Object.entries(source)){if(v==='__delete__')delete target[k];else if(v&&typeof v==='object'&&!Array.isArray(v)){target[k]??={};mergeInto(target[k],v);}else target[k]=v;}return target;};
     let result;
@@ -139,7 +141,11 @@ async (page) => {
   await page.getByRole('button',{name:'Guardar',exact:true}).click();await saved();
   must(fixture.get('sections/mini-pancakes/toppings/sugar').free,'Free flag lost on save');
 
+  holdProductReads=true;
   await page.goto(origin+'/');
+  await page.locator('.category-grid').waitFor();
+  must(await page.locator('.category').count()===6,'Home waited for product reads');
+  holdProductReads=false;releaseProductReads();
   await page.getByRole('button',{name:'Ver carta',exact:true}).click();
   const sameGeometry=(a,b)=>Math.abs(a.ratio-b.ratio)<.015&&a.position===b.position&&a.transform===b.transform;
   const publicFrame=page.locator('.category[data-group="desayunos"] .photo-frame');
@@ -150,6 +156,7 @@ async (page) => {
   must(await page.locator('.hero-photo').count()===1,'Saved hero photo not read');
   must((await page.locator('.brand-logo img').first().getAttribute('src'))==='logo_letras.png','Original logo missing');
   await page.locator('.category[data-group="pancakes"]').click();
+  await page.locator('#product-dialog[open]').waitFor();
   must(await page.locator('#product-dialog[open]').count()===1,'Single-product category did not open directly');
   must((await page.locator('#product-title').innerText())==='12 mini pancakes','Wrong category product opened');
   await page.keyboard.press('Escape');
@@ -163,6 +170,7 @@ async (page) => {
   must(await page.locator('#combination-total').count()===0,'Aggregate price remains');
   await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Mini pancakes',exact:true}).click();
+  await page.locator('#product-dialog[open]').waitFor();
   must(await page.locator('#product-dialog[open]').count()===1,'Single-product navigation did not open directly');
   must(await page.locator('#product-dialog .extra-info').count()===2,'Toppings missing');
   must(await page.locator('#product-dialog input').count()===0,'Selectable toppings remain');
